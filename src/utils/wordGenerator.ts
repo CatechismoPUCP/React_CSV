@@ -45,9 +45,10 @@ export const generateWordDocument = async (
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
     
-    // Generate filename
+    // Generate filename with course ID
     const dateStr = format(lessonData.date, 'yyyy_MM_dd');
-    const filename = `registro_presenza_${dateStr}.docx`;
+    const courseId = lessonData.courseId || 'CORSO';
+    const filename = `modello B fad_${courseId}_${dateStr}.docx`;
     
     // Save file
     saveAs(output, filename);
@@ -109,7 +110,7 @@ const prepareTemplateData = (lessonData: LessonData): WordTemplateData => {
         templateData[`PomeOraOut${index}` as keyof WordTemplateData] = '';
       }
     } else {
-      // If present, show actual times
+      // If present, show actual times (exact times, not rounded)
       // Morning times
       if (participant.morningFirstJoin && lessonData.lessonType !== 'afternoon') {
         templateData[`MattOraIn${index}` as keyof WordTemplateData] = formatTime(participant.morningFirstJoin);
@@ -136,9 +137,40 @@ const prepareTemplateData = (lessonData: LessonData): WordTemplateData => {
   return templateData;
 };
 
+// Round time to nearest hour for better readability
+const roundToNearestHour = (date: Date): Date => {
+  const rounded = new Date(date);
+  const minutes = rounded.getMinutes();
+  
+  if (minutes >= 30) {
+    // Round up to next hour
+    rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
+  } else {
+    // Round down to current hour
+    rounded.setHours(rounded.getHours(), 0, 0, 0);
+  }
+  
+  return rounded;
+};
+
+// Get lesson end time based on start time and lesson type
+const getLessonEndTime = (startTime: Date, lessonType: 'morning' | 'afternoon' | 'both'): Date => {
+  const endTime = new Date(startTime);
+  
+  if (lessonType === 'morning') {
+    endTime.setHours(13, 0, 0, 0); // Morning lessons end at 13:00
+  } else if (lessonType === 'afternoon') {
+    endTime.setHours(18, 0, 0, 0); // Afternoon lessons end at 18:00
+  } else {
+    // For 'both', return end of afternoon
+    endTime.setHours(18, 0, 0, 0);
+  }
+  
+  return endTime;
+};
+
 const getScheduleText = (lessonType: 'morning' | 'afternoon' | 'both', participants: ProcessedParticipant[]): string => {
-  // Find the actual start time from participants
-  let actualStartTime = '';
+  let startTime: Date | null = null;
   
   if (lessonType === 'morning' || lessonType === 'both') {
     const morningStarts = participants
@@ -148,13 +180,16 @@ const getScheduleText = (lessonType: 'morning' | 'afternoon' | 'both', participa
     
     if (morningStarts.length > 0) {
       const earliestStart = morningStarts[0];
-      const startHour = earliestStart.getHours();
-      const roundedHour = startHour >= 9 ? Math.max(9, startHour) : 9;
-      actualStartTime = `${roundedHour.toString().padStart(2, '0')}:00`;
+      const roundedStart = roundToNearestHour(earliestStart);
+      // Ensure morning doesn't start before 9:00
+      if (roundedStart.getHours() < 9) {
+        roundedStart.setHours(9, 0, 0, 0);
+      }
+      startTime = roundedStart;
     }
   }
   
-  if (lessonType === 'afternoon' || (lessonType === 'both' && !actualStartTime)) {
+  if (lessonType === 'afternoon' && !startTime) {
     const afternoonStarts = participants
       .filter(p => p.afternoonFirstJoin)
       .map(p => p.afternoonFirstJoin!)
@@ -162,25 +197,38 @@ const getScheduleText = (lessonType: 'morning' | 'afternoon' | 'both', participa
     
     if (afternoonStarts.length > 0) {
       const earliestStart = afternoonStarts[0];
-      const startHour = earliestStart.getHours();
-      const roundedHour = startHour >= 14 ? Math.max(14, startHour) : 14;
-      actualStartTime = `${roundedHour.toString().padStart(2, '0')}:00`;
+      const roundedStart = roundToNearestHour(earliestStart);
+      // Ensure afternoon doesn't start before 14:00
+      if (roundedStart.getHours() < 14) {
+        roundedStart.setHours(14, 0, 0, 0);
+      }
+      startTime = roundedStart;
     }
   }
   
+  // Format the schedule based on lesson type with standard end times
   switch (lessonType) {
-    case 'morning':
-      return actualStartTime ? `${actualStartTime} - 13:00` : '09:00 - 13:00';
-    case 'afternoon':
-      return actualStartTime ? `${actualStartTime} - 18:00` : '14:00 - 18:00';
-    case 'both':
-      const morningSchedule = actualStartTime && actualStartTime !== '14:00' ? `${actualStartTime} - 13:00` : '09:00 - 13:00';
-      return `${morningSchedule} / 14:00 - 18:00`;
+    case 'morning': {
+      const start = startTime ? formatTime(startTime) : '09:00';
+      return `${start} - 13:00`;
+    }
+    case 'afternoon': {
+      const start = startTime ? formatTime(startTime) : '14:00';
+      return `${start} - 18:00`;
+    }
+    case 'both': {
+      const morningStart = startTime ? formatTime(startTime) : '09:00';
+      return `${morningStart} - 13:00 / 14:00 - 18:00`;
+    }
     default:
       return '';
   }
 };
 
-const formatTime = (date: Date): string => {
+const formatTime = (date: Date, roundToHour: boolean = false): string => {
+  if (roundToHour) {
+    const rounded = roundToNearestHour(date);
+    return format(rounded, 'HH:mm');
+  }
   return format(date, 'HH:mm');
 };

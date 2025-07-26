@@ -49,14 +49,16 @@ export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({
     const wasPresent = (targetHour: number, sessions: { joinTime: Date; leaveTime: Date }[]): boolean => {
       if (sessions.length === 0) return false;
       
-      const hourStart = new Date(lessonDate);
-      hourStart.setHours(targetHour, 0, 0, 0);
-      const hourEnd = new Date(lessonDate);
-      hourEnd.setHours(targetHour, 59, 59, 999);
-      
       let totalPresenceMinutes = 0;
       
       sessions.forEach(session => {
+        // Use the actual session date instead of lessonDate
+        const sessionDate = session.joinTime;
+        const hourStart = new Date(sessionDate);
+        hourStart.setHours(targetHour, 0, 0, 0);
+        const hourEnd = new Date(sessionDate);
+        hourEnd.setHours(targetHour, 59, 59, 999);
+        
         const sessionStart = new Date(Math.max(session.joinTime.getTime(), hourStart.getTime()));
         const sessionEnd = new Date(Math.min(session.leaveTime.getTime(), hourEnd.getTime()));
         

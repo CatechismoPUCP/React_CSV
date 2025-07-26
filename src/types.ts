@@ -25,8 +25,11 @@ export interface ProcessedParticipant {
 export interface LessonData {
   date: Date;
   subject: string;
+  courseId: string;
   participants: ProcessedParticipant[];
   lessonType: 'morning' | 'afternoon' | 'both';
+  startTime?: Date;
+  endTime?: Date;
 }
 
 export interface WordTemplateData {

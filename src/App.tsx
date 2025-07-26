@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { ParticipantEditor } from './components/ParticipantEditor';
 import { DebugInfo } from './components/DebugInfo';
 import { AttendanceDashboard } from './components/AttendanceDashboard';
+import { TemplateGuide } from './components/TemplateGuide';
 import { parseZoomCSV, processParticipants } from './utils/csvParser';
 import { generateWordDocument } from './utils/wordGenerator';
 import { ProcessedParticipant, LessonType, LessonData } from './types';
-import { FiFileText, FiCalendar, FiDownload, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { FiFileText, FiCalendar, FiDownload, FiAlertCircle, FiCheckCircle, FiInfo, FiHelpCircle } from 'react-icons/fi';
 import './App.css';
 
 function App() {
@@ -15,15 +16,38 @@ function App() {
   const [afternoonFile, setAfternoonFile] = useState<File | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [subject, setSubject] = useState('');
+  const [courseId, setCourseId] = useState('');
   const [participants, setParticipants] = useState<ProcessedParticipant[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'upload' | 'edit' | 'generate'>('upload');
   const [debugMode, setDebugMode] = useState(false);
+  const [showTemplateGuide, setShowTemplateGuide] = useState(false);
+
+  // Auto-load the existing template file on component mount
+  useEffect(() => {
+    const loadDefaultTemplate = async () => {
+      try {
+        // Try to fetch the existing template file
+        const response = await fetch('/modello B fad_{ID_CORSO}_{START_DATE}.docx');
+        if (response.ok) {
+          const blob = await response.blob();
+          const file = new File([blob], 'modello B fad_{ID_CORSO}_{START_DATE}.docx', {
+            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          });
+          setTemplateFile(file);
+          console.log('Template file loaded automatically');
+        }
+      } catch (error) {
+        console.log('Template file not found, user will need to select manually');
+      }
+    };
+    loadDefaultTemplate();
+  }, []);
 
   const handleFileProcessing = async () => {
-    if (!templateFile || !subject.trim()) {
-      setError('Seleziona il template Word e inserisci l\'argomento della lezione');
+    if (!templateFile || !subject.trim() || !courseId.trim()) {
+      setError('Seleziona il template Word, inserisci l\'ID corso e l\'argomento della lezione');
       return;
     }
 
@@ -97,6 +121,7 @@ function App() {
       const lessonData: LessonData = {
         date: lessonDate,
         subject: subject.trim(),
+        courseId: courseId.trim() || 'CORSO',
         participants: participants,
         lessonType: lessonType
       };
@@ -150,6 +175,11 @@ function App() {
           <div className="upload-section">
             <div className="lesson-type-selector">
               <h3>Tipo di Lezione</h3>
+              <div className="info-box">
+                <FiInfo className="icon" />
+                <p><strong>Esempio:</strong> Solo l'orario di <strong>inizio lezione</strong> viene arrotondato all'ora spaccata più vicina. 
+                Se la prima persona entra alle 09:15, l'orario di inizio sarà mostrato come 09:00. Gli orari individuali di ingresso/uscita rimangono esatti.</p>
+              </div>
               <div className="radio-group">
                 <label>
                   <input
@@ -204,28 +234,60 @@ function App() {
                 />
               )}
 
-              <FileUpload
-                label="Template Word (.docx)"
-                accept=".docx"
-                onFileSelect={setTemplateFile}
-                selectedFile={templateFile || undefined}
-                icon={<FiFileText size={24} />}
-                required
-              />
+              <div className="template-section">
+                <div className="template-header">
+                  <FileUpload
+                    label="Template Word (.docx)"
+                    accept=".docx"
+                    onFileSelect={setTemplateFile}
+                    selectedFile={templateFile || undefined}
+                    icon={<FiFileText size={24} />}
+                    required
+                  />
+                  <button 
+                    type="button" 
+                    className="help-button"
+                    onClick={() => setShowTemplateGuide(true)}
+                    title="Guida Template"
+                  >
+                    <FiHelpCircle size={20} />
+                    Guida Template
+                  </button>
+                </div>
+                <div className="template-info">
+                  <p><strong>Percorso standard:</strong> <code>modello B fad_{'{'}{courseId || 'ID_CORSO'}{'}'}_{'{'}{new Date().toISOString().split('T')[0].replace(/-/g, '_')}{'}'}.docx</code></p>
+                </div>
+              </div>
             </div>
 
-            <div className="subject-input">
-              <label htmlFor="subject">
-                Argomento della Lezione <span className="required">*</span>
-              </label>
-              <input
-                id="subject"
-                type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="Es: AI: Intelligenza Artificiale"
-                required
-              />
+            <div className="form-inputs">
+              <div className="input-group">
+                <label htmlFor="courseId">
+                  ID Corso <span className="required">*</span>
+                </label>
+                <input
+                  id="courseId"
+                  type="text"
+                  value={courseId}
+                  onChange={(e) => setCourseId(e.target.value)}
+                  placeholder="Es: AI2025"
+                  required
+                />
+              </div>
+              
+              <div className="input-group">
+                <label htmlFor="subject">
+                  Argomento della Lezione <span className="required">*</span>
+                </label>
+                <input
+                  id="subject"
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Es: AI: Intelligenza Artificiale"
+                  required
+                />
+              </div>
             </div>
 
             <button
@@ -268,6 +330,7 @@ function App() {
                 lessonData={{
                   date: new Date(),
                   subject: subject,
+                  courseId: courseId.trim() || 'CORSO',
                   participants: participants,
                   lessonType: lessonType
                 }}
@@ -313,6 +376,11 @@ function App() {
           </div>
         )}
       </main>
+      
+      <TemplateGuide 
+        isOpen={showTemplateGuide} 
+        onClose={() => setShowTemplateGuide(false)} 
+      />
     </div>
   );
 }
