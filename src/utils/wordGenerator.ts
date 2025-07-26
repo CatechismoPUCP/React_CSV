@@ -161,6 +161,30 @@ const roundToNearestHour = (date: Date): Date => {
   return rounded;
 };
 
+// Get actual session end hour based on participant data
+const getActualSessionEndHour = (participants: ProcessedParticipant[], session: 'morning' | 'afternoon'): number => {
+  const endTimes: Date[] = [];
+  
+  participants.forEach(participant => {
+    if (session === 'morning' && participant.morningLastLeave) {
+      endTimes.push(participant.morningLastLeave);
+    } else if (session === 'afternoon' && participant.afternoonLastLeave) {
+      endTimes.push(participant.afternoonLastLeave);
+    }
+  });
+  
+  if (endTimes.length === 0) {
+    // Fallback to default end times
+    return session === 'morning' ? 13 : 18;
+  }
+  
+  // Find the latest end time and round to nearest hour
+  const latestEndTime = new Date(Math.max(...endTimes.map(t => t.getTime())));
+  const roundedEndTime = roundToNearestHour(latestEndTime);
+  
+  return roundedEndTime.getHours();
+};
+
 // Get lesson end time based on start time and lesson type
 const getLessonEndTime = (startTime: Date, lessonType: 'morning' | 'afternoon' | 'both'): Date => {
   const endTime = new Date(startTime);
@@ -197,21 +221,21 @@ const getScheduleText = (
     const afternoonHours = sortedHours.filter(h => h >= 14 && h <= 18);
     
     if (morningHours.length > 0 && afternoonHours.length > 0) {
-      // Both sessions
+      // Both sessions - calculate actual end times based on participant data
       const morningStart = Math.min(...morningHours);
-      const morningEnd = Math.max(...morningHours) + 1; // +1 because we want the end of the hour
+      const morningEnd = getActualSessionEndHour(allParticipants, 'morning');
       const afternoonStart = Math.min(...afternoonHours);
-      const afternoonEnd = Math.max(...afternoonHours) + 1;
+      const afternoonEnd = getActualSessionEndHour(allParticipants, 'afternoon');
       return `${morningStart.toString().padStart(2, '0')}:00 - ${morningEnd.toString().padStart(2, '0')}:00 / ${afternoonStart.toString().padStart(2, '0')}:00 - ${afternoonEnd.toString().padStart(2, '0')}:00`;
     } else if (morningHours.length > 0) {
       // Morning only
       const start = Math.min(...morningHours);
-      const end = Math.max(...morningHours) + 1;
+      const end = getActualSessionEndHour(allParticipants, 'morning');
       return `${start.toString().padStart(2, '0')}:00 - ${end.toString().padStart(2, '0')}:00`;
     } else if (afternoonHours.length > 0) {
       // Afternoon only
       const start = Math.min(...afternoonHours);
-      const end = Math.max(...afternoonHours) + 1;
+      const end = getActualSessionEndHour(allParticipants, 'afternoon');
       return `${start.toString().padStart(2, '0')}:00 - ${end.toString().padStart(2, '0')}:00`;
     }
   }
@@ -253,19 +277,23 @@ const getScheduleText = (
     }
   }
   
-  // Format the schedule based on lesson type with standard end times
+  // Format the schedule based on lesson type with actual end times
   switch (lessonType) {
     case 'morning': {
       const start = startTime ? formatTime(startTime) : '09:00';
-      return `${start} - 13:00`;
+      const end = getActualSessionEndHour(allParticipants, 'morning');
+      return `${start} - ${end.toString().padStart(2, '0')}:00`;
     }
     case 'afternoon': {
       const start = startTime ? formatTime(startTime) : '14:00';
-      return `${start} - 18:00`;
+      const end = getActualSessionEndHour(allParticipants, 'afternoon');
+      return `${start} - ${end.toString().padStart(2, '0')}:00`;
     }
     case 'both': {
       const morningStart = startTime ? formatTime(startTime) : '09:00';
-      return `${morningStart} - 13:00 / 14:00 - 18:00`;
+      const morningEnd = getActualSessionEndHour(allParticipants, 'morning');
+      const afternoonEnd = getActualSessionEndHour(allParticipants, 'afternoon');
+      return `${morningStart} - ${morningEnd.toString().padStart(2, '0')}:00 / 14:00 - ${afternoonEnd.toString().padStart(2, '0')}:00`;
     }
     default:
       return '';

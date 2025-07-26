@@ -7,6 +7,9 @@ import { TemplateGuide } from './components/TemplateGuide';
 import { parseZoomCSV, processParticipants } from './utils/csvParser';
 import { generateWordDocument } from './utils/wordGenerator';
 import { ProcessedParticipant, LessonType, LessonData } from './types';
+import { format } from 'date-fns';
+import { FiFileText, FiCalendar, FiDownload, FiAlertCircle, FiCheckCircle, FiInfo, FiHelpCircle } from 'react-icons/fi';
+import './App.css';
 
 // Helper function to calculate dynamic lesson hours based on actual data
 const calculateDynamicLessonHours = (
@@ -43,8 +46,7 @@ const calculateDynamicLessonHours = (
   
   return Array.from(hours).sort((a, b) => a - b);
 };
-import { FiFileText, FiCalendar, FiDownload, FiAlertCircle, FiCheckCircle, FiInfo, FiHelpCircle } from 'react-icons/fi';
-import './App.css';
+
 
 function App() {
   const [lessonType, setLessonType] = useState<LessonType>('both');
@@ -66,8 +68,8 @@ function App() {
   useEffect(() => {
     const loadDefaultTemplate = async () => {
       try {
-        // Try to fetch the existing template file
-        const response = await fetch('/modello B fad_{ID_CORSO}_{START_DATE}.docx');
+        // Try to fetch the existing template file from the public folder
+        const response = await fetch('./modello B fad_{ID_CORSO}_{START_DATE}.docx');
         if (response.ok) {
           const blob = await response.blob();
           const file = new File([blob], 'modello B fad_{ID_CORSO}_{START_DATE}.docx', {
