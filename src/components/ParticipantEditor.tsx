@@ -5,6 +5,7 @@ import { FiClock, FiCheckCircle, FiXCircle, FiPlus, FiTrash2, FiArrowUp, FiArrow
 
 interface ParticipantEditorProps {
   participants: ProcessedParticipant[];
+  organizer?: ProcessedParticipant;
   onParticipantsChange: (participants: ProcessedParticipant[]) => void;
   lessonType: 'morning' | 'afternoon' | 'both';
 }
@@ -127,6 +128,7 @@ const ParticipantItem: React.FC<ParticipantItemProps> = ({
 
 export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
   participants,
+  organizer,
   onParticipantsChange,
   lessonType
 }) => {
@@ -156,6 +158,11 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
       email: '',
       totalAbsenceMinutes: 999, // Mark as absent by default
       isPresent: false,
+      isAbsent: true, // Explicitly mark as absent
+      allConnections: {
+        morning: [],
+        afternoon: []
+      },
       sessions: {
         morning: [],
         afternoon: []
@@ -181,8 +188,52 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
     onParticipantsChange(updated);
   };
 
+  const formatTime = (date?: Date) => {
+    if (!date) return '--:--';
+    return date.toLocaleTimeString('it-IT', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+
   return (
     <div className="participant-editor">
+      {organizer && (
+        <div className="organizer-section">
+          <div className="section-header">
+            <h3>Organizzatore</h3>
+            <p className="section-description">
+              L'organizzatore è automaticamente escluso dalla lista dei partecipanti.
+            </p>
+          </div>
+          <div className="organizer-info">
+            <div className="organizer-name">
+              <strong>{organizer.name}</strong>
+              {organizer.email && <span className="email">({organizer.email})</span>}
+            </div>
+            <div className="organizer-times">
+              {lessonType !== 'afternoon' && organizer.morningFirstJoin && (
+                <div className="time-info">
+                  <span className="time-label">Mattina:</span>
+                  <span className="time-value">
+                    {formatTime(organizer.morningFirstJoin)} - {formatTime(organizer.morningLastLeave)}
+                  </span>
+                </div>
+              )}
+              {lessonType !== 'morning' && organizer.afternoonFirstJoin && (
+                <div className="time-info">
+                  <span className="time-label">Pomeriggio:</span>
+                  <span className="time-value">
+                    {formatTime(organizer.afternoonFirstJoin)} - {formatTime(organizer.afternoonLastLeave)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="section-header">
         <h3>Partecipanti Trovati ({participants.length})</h3>
         <p className="section-description">

@@ -4,8 +4,10 @@ import { FiClock, FiUser, FiCheckCircle, FiXCircle } from 'react-icons/fi';
 
 interface AttendanceDashboardProps {
   participants: ProcessedParticipant[];
+  organizer?: ProcessedParticipant;
   lessonType: LessonType;
   lessonDate: Date;
+  lessonHours: number[];
 }
 
 interface HourBlock {
@@ -16,10 +18,18 @@ interface HourBlock {
 
 export const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({
   participants,
+  organizer,
   lessonType,
-  lessonDate
+  lessonDate,
+  lessonHours
 }) => {
   const getLessonHours = (): number[] => {
+    // Use dynamic lesson hours if available, otherwise fall back to defaults
+    if (lessonHours && lessonHours.length > 0) {
+      return lessonHours;
+    }
+    
+    // Fallback to default hours
     switch (lessonType) {
       case 'morning':
         return [9, 10, 11, 12];

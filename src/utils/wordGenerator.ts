@@ -45,10 +45,12 @@ export const generateWordDocument = async (
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
     
-    // Generate filename with course ID
+    // Generate filename with course ID (if provided)
     const dateStr = format(lessonData.date, 'yyyy_MM_dd');
-    const courseId = lessonData.courseId || 'CORSO';
-    const filename = `modello B fad_${courseId}_${dateStr}.docx`;
+    let filename = `modello B fad_${dateStr}.docx`;
+    if (lessonData.courseId) {
+      filename = `modello B fad_${lessonData.courseId}_${dateStr}.docx`;
+    }
     
     // Save file
     saveAs(output, filename);
@@ -76,7 +78,7 @@ const prepareTemplateData = (lessonData: LessonData): WordTemplateData => {
     day: format(date, 'dd'),
     month: format(date, 'MM'),
     year: format(date, 'yyyy'),
-    orariolezione: getScheduleText(lessonData.lessonType, lessonData.participants),
+    orariolezione: getScheduleText(lessonData.lessonType, lessonData.participants, lessonData.organizer, lessonData.lessonHours),
     argomento: lessonData.subject || '',
   };
   
@@ -98,40 +100,46 @@ const prepareTemplateData = (lessonData: LessonData): WordTemplateData => {
     
     templateData[`nome${index}` as keyof WordTemplateData] = participant.name || '';
     
-    // Check if participant is marked as absent
-    if (!participant.isPresent) {
-      // If absent, show "ASSENTE" instead of times
+    // Check if participant is explicitly marked as absent or has no sessions
+    const isExplicitlyAbsent = participant.isAbsent || (!participant.isPresent && 
+      participant.sessions.morning.length === 0 && participant.sessions.afternoon.length === 0);
+    
+    if (isExplicitlyAbsent) {
+      // If explicitly absent, all placeholders become "ASSENTE"
       if (lessonData.lessonType !== 'afternoon') {
         templateData[`MattOraIn${index}` as keyof WordTemplateData] = 'ASSENTE';
-        templateData[`MattOraOut${index}` as keyof WordTemplateData] = '';
+        templateData[`MattOraOut${index}` as keyof WordTemplateData] = 'ASSENTE';
       }
       if (lessonData.lessonType !== 'morning') {
         templateData[`PomeOraIn${index}` as keyof WordTemplateData] = 'ASSENTE';
-        templateData[`PomeOraOut${index}` as keyof WordTemplateData] = '';
+        templateData[`PomeOraOut${index}` as keyof WordTemplateData] = 'ASSENTE';
       }
+      templateData[`presenza${index}` as keyof WordTemplateData] = 'ASSENTE';
     } else {
-      // If present, show actual times (exact times, not rounded)
+      // If present, show actual times with seconds precision
       // Morning times
       if (participant.morningFirstJoin && lessonData.lessonType !== 'afternoon') {
-        templateData[`MattOraIn${index}` as keyof WordTemplateData] = formatTime(participant.morningFirstJoin);
+        templateData[`MattOraIn${index}` as keyof WordTemplateData] = formatTimeWithSeconds(participant.morningFirstJoin);
       }
       
       if (participant.morningLastLeave && lessonData.lessonType !== 'afternoon') {
-        templateData[`MattOraOut${index}` as keyof WordTemplateData] = formatTime(participant.morningLastLeave);
+        templateData[`MattOraOut${index}` as keyof WordTemplateData] = formatTimeWithSeconds(participant.morningLastLeave);
       }
       
       // Afternoon times
       if (participant.afternoonFirstJoin && lessonData.lessonType !== 'morning') {
-        templateData[`PomeOraIn${index}` as keyof WordTemplateData] = formatTime(participant.afternoonFirstJoin);
+        templateData[`PomeOraIn${index}` as keyof WordTemplateData] = formatTimeWithSeconds(participant.afternoonFirstJoin);
       }
       
       if (participant.afternoonLastLeave && lessonData.lessonType !== 'morning') {
-        templateData[`PomeOraOut${index}` as keyof WordTemplateData] = formatTime(participant.afternoonLastLeave);
+        templateData[`PomeOraOut${index}` as keyof WordTemplateData] = formatTimeWithSeconds(participant.afternoonLastLeave);
       }
+      
+      // Presence status with connection details
+      const connectionsList = formatAllConnections(participant, lessonData.lessonType);
+      templateData[`presenza${index}` as keyof WordTemplateData] = participant.isPresent ? 
+        `✅ ${connectionsList}` : `❌ ${connectionsList}`;
     }
-    
-    // Presence status
-    templateData[`presenza${index}` as keyof WordTemplateData] = participant.isPresent ? '✅' : '❌ ASSENTE';
   });
   
   return templateData;
@@ -169,11 +177,50 @@ const getLessonEndTime = (startTime: Date, lessonType: 'morning' | 'afternoon' |
   return endTime;
 };
 
-const getScheduleText = (lessonType: 'morning' | 'afternoon' | 'both', participants: ProcessedParticipant[]): string => {
+const getScheduleText = (
+  lessonType: 'morning' | 'afternoon' | 'both', 
+  participants: ProcessedParticipant[], 
+  organizer?: ProcessedParticipant, 
+  lessonHours?: number[]
+): string => {
+  // Combine participants and organizer for analysis
+  const allParticipants = organizer ? [...participants, organizer] : participants;
+  
+  // Use dynamic lesson hours if available
+  if (lessonHours && lessonHours.length > 0) {
+    const sortedHours = [...lessonHours].sort((a, b) => a - b);
+    const startHour = sortedHours[0];
+    const endHour = sortedHours[sortedHours.length - 1];
+    
+    // Determine if it's morning, afternoon, or both based on hours
+    const morningHours = sortedHours.filter(h => h >= 9 && h <= 13);
+    const afternoonHours = sortedHours.filter(h => h >= 14 && h <= 18);
+    
+    if (morningHours.length > 0 && afternoonHours.length > 0) {
+      // Both sessions
+      const morningStart = Math.min(...morningHours);
+      const morningEnd = Math.max(...morningHours) + 1; // +1 because we want the end of the hour
+      const afternoonStart = Math.min(...afternoonHours);
+      const afternoonEnd = Math.max(...afternoonHours) + 1;
+      return `${morningStart.toString().padStart(2, '0')}:00 - ${morningEnd.toString().padStart(2, '0')}:00 / ${afternoonStart.toString().padStart(2, '0')}:00 - ${afternoonEnd.toString().padStart(2, '0')}:00`;
+    } else if (morningHours.length > 0) {
+      // Morning only
+      const start = Math.min(...morningHours);
+      const end = Math.max(...morningHours) + 1;
+      return `${start.toString().padStart(2, '0')}:00 - ${end.toString().padStart(2, '0')}:00`;
+    } else if (afternoonHours.length > 0) {
+      // Afternoon only
+      const start = Math.min(...afternoonHours);
+      const end = Math.max(...afternoonHours) + 1;
+      return `${start.toString().padStart(2, '0')}:00 - ${end.toString().padStart(2, '0')}:00`;
+    }
+  }
+  
+  // Fallback to original logic if no dynamic hours
   let startTime: Date | null = null;
   
   if (lessonType === 'morning' || lessonType === 'both') {
-    const morningStarts = participants
+    const morningStarts = allParticipants
       .filter(p => p.morningFirstJoin)
       .map(p => p.morningFirstJoin!)
       .sort((a, b) => a.getTime() - b.getTime());
@@ -190,7 +237,7 @@ const getScheduleText = (lessonType: 'morning' | 'afternoon' | 'both', participa
   }
   
   if (lessonType === 'afternoon' && !startTime) {
-    const afternoonStarts = participants
+    const afternoonStarts = allParticipants
       .filter(p => p.afternoonFirstJoin)
       .map(p => p.afternoonFirstJoin!)
       .sort((a, b) => a.getTime() - b.getTime());
@@ -231,4 +278,32 @@ const formatTime = (date: Date, roundToHour: boolean = false): string => {
     return format(rounded, 'HH:mm');
   }
   return format(date, 'HH:mm');
+};
+
+// Format time with seconds for detailed logging
+const formatTimeWithSeconds = (date: Date): string => {
+  return format(date, 'HH:mm:ss');
+};
+
+// Format all connections for a participant
+const formatAllConnections = (participant: ProcessedParticipant, lessonType: 'morning' | 'afternoon' | 'both'): string => {
+  const connections: string[] = [];
+  
+  // Morning connections
+  if (lessonType !== 'afternoon' && participant.allConnections.morning.length > 0) {
+    const morningConnections = participant.allConnections.morning
+      .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
+      .join(', ');
+    connections.push(`Mattina: ${morningConnections}`);
+  }
+  
+  // Afternoon connections
+  if (lessonType !== 'morning' && participant.allConnections.afternoon.length > 0) {
+    const afternoonConnections = participant.allConnections.afternoon
+      .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
+      .join(', ');
+    connections.push(`Pomeriggio: ${afternoonConnections}`);
+  }
+  
+  return connections.length > 0 ? connections.join(' | ') : 'Nessuna connessione';
 };

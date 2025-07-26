@@ -7,6 +7,42 @@ import { TemplateGuide } from './components/TemplateGuide';
 import { parseZoomCSV, processParticipants } from './utils/csvParser';
 import { generateWordDocument } from './utils/wordGenerator';
 import { ProcessedParticipant, LessonType, LessonData } from './types';
+
+// Helper function to calculate dynamic lesson hours based on actual data
+const calculateDynamicLessonHours = (
+  participants: ProcessedParticipant[], 
+  organizer: ProcessedParticipant | null, 
+  lessonType: LessonType
+): number[] => {
+  const allParticipants = organizer ? [...participants, organizer] : participants;
+  const hours = new Set<number>();
+  
+  allParticipants.forEach(participant => {
+    // Add hours from morning sessions
+    if (lessonType !== 'afternoon') {
+      participant.allConnections.morning.forEach(connection => {
+        const startHour = connection.joinTime.getHours();
+        const endHour = connection.leaveTime.getHours();
+        for (let h = Math.max(9, startHour); h <= Math.min(13, endHour); h++) {
+          hours.add(h);
+        }
+      });
+    }
+    
+    // Add hours from afternoon sessions
+    if (lessonType !== 'morning') {
+      participant.allConnections.afternoon.forEach(connection => {
+        const startHour = connection.joinTime.getHours();
+        const endHour = connection.leaveTime.getHours();
+        for (let h = Math.max(14, startHour); h <= Math.min(18, endHour); h++) {
+          hours.add(h);
+        }
+      });
+    }
+  });
+  
+  return Array.from(hours).sort((a, b) => a - b);
+};
 import { FiFileText, FiCalendar, FiDownload, FiAlertCircle, FiCheckCircle, FiInfo, FiHelpCircle } from 'react-icons/fi';
 import './App.css';
 
@@ -18,6 +54,8 @@ function App() {
   const [subject, setSubject] = useState('');
   const [courseId, setCourseId] = useState('');
   const [participants, setParticipants] = useState<ProcessedParticipant[]>([]);
+  const [organizer, setOrganizer] = useState<ProcessedParticipant | null>(null);
+  const [lessonHours, setLessonHours] = useState<number[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'upload' | 'edit' | 'generate'>('upload');
@@ -46,8 +84,8 @@ function App() {
   }, []);
 
   const handleFileProcessing = async () => {
-    if (!templateFile || !subject.trim() || !courseId.trim()) {
-      setError('Seleziona il template Word, inserisci l\'ID corso e l\'argomento della lezione');
+    if (!templateFile || !subject.trim()) {
+      setError('Seleziona il template Word e inserisci l\'argomento della lezione');
       return;
     }
 
@@ -86,8 +124,14 @@ function App() {
       }
 
       // Process participants
-      const processedParticipants = processParticipants(morningParticipants, afternoonParticipants);
+      const { participants: processedParticipants, organizer: processedOrganizer } = processParticipants(morningParticipants, afternoonParticipants);
+      
+      // Calculate dynamic lesson hours based on actual data
+      const dynamicLessonHours = calculateDynamicLessonHours(processedParticipants, processedOrganizer, lessonType);
+      
       setParticipants(processedParticipants);
+      setOrganizer(processedOrganizer);
+      setLessonHours(dynamicLessonHours);
       setStep('edit');
     } catch (err) {
       setError('Errore durante l\'elaborazione dei file CSV: ' + (err as Error).message);
@@ -121,9 +165,11 @@ function App() {
       const lessonData: LessonData = {
         date: lessonDate,
         subject: subject.trim(),
-        courseId: courseId.trim() || 'CORSO',
+        courseId: courseId.trim() || undefined,
         participants: participants,
-        lessonType: lessonType
+        organizer: organizer || undefined,
+        lessonType: lessonType,
+        lessonHours: lessonHours
       };
 
       await generateWordDocument(lessonData, templateFile);
@@ -263,15 +309,14 @@ function App() {
             <div className="form-inputs">
               <div className="input-group">
                 <label htmlFor="courseId">
-                  ID Corso <span className="required">*</span>
+                  ID Corso (facoltativo)
                 </label>
                 <input
                   id="courseId"
                   type="text"
                   value={courseId}
                   onChange={(e) => setCourseId(e.target.value)}
-                  placeholder="Es: AI2025"
-                  required
+                  placeholder="Es: AI2024 (se vuoto, non verrà incluso nel nome file)"
                 />
               </div>
               
@@ -304,13 +349,16 @@ function App() {
           <div className="edit-section">
             <ParticipantEditor
               participants={participants}
+              organizer={organizer || undefined}
               onParticipantsChange={setParticipants}
               lessonType={lessonType}
             />
 
             <AttendanceDashboard
               participants={participants}
+              organizer={organizer || undefined}
               lessonType={lessonType}
+              lessonHours={lessonHours}
               lessonDate={(() => {
                 // Extract date from filename (assuming format like "Mattina_2025_07_08.csv")
                 const dateFile = morningFile || afternoonFile;
@@ -330,9 +378,11 @@ function App() {
                 lessonData={{
                   date: new Date(),
                   subject: subject,
-                  courseId: courseId.trim() || 'CORSO',
+                  courseId: courseId.trim() || undefined,
                   participants: participants,
-                  lessonType: lessonType
+                  organizer: organizer || undefined,
+                  lessonType: lessonType,
+                  lessonHours: lessonHours
                 }}
                 templateData={{}}
               />

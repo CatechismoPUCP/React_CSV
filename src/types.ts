@@ -5,6 +5,7 @@ export interface ZoomParticipant {
   leaveTime: Date;
   duration: number;
   isGuest: boolean;
+  isOrganizer?: boolean;
 }
 
 export interface ProcessedParticipant {
@@ -16,6 +17,12 @@ export interface ProcessedParticipant {
   afternoonLastLeave?: Date;
   totalAbsenceMinutes: number;
   isPresent: boolean;
+  isAbsent?: boolean; // Explicitly marked as absent
+  isOrganizer?: boolean;
+  allConnections: {
+    morning: Array<{ joinTime: Date; leaveTime: Date; }>;
+    afternoon: Array<{ joinTime: Date; leaveTime: Date; }>;
+  };
   sessions: {
     morning: ZoomParticipant[];
     afternoon: ZoomParticipant[];
@@ -25,11 +32,13 @@ export interface ProcessedParticipant {
 export interface LessonData {
   date: Date;
   subject: string;
-  courseId: string;
+  courseId?: string; // Made optional
   participants: ProcessedParticipant[];
+  organizer?: ProcessedParticipant;
   lessonType: 'morning' | 'afternoon' | 'both';
-  startTime?: Date;
-  endTime?: Date;
+  actualStartTime?: Date;
+  actualEndTime?: Date;
+  lessonHours: number[]; // Dynamic lesson hours based on actual data
 }
 
 export interface WordTemplateData {

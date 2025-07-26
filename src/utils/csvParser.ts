@@ -29,14 +29,17 @@ export const parseZoomCSV = (csvContent: string): ZoomParticipant[] => {
     console.warn('Errori durante il parsing CSV:', result.errors);
   }
   
-  return result.data.map((row: any) => ({
+  const participants = result.data.map((row: any, index: number) => ({
     name: cleanParticipantName(row['Nome (nome originale)'] || ''),
     email: row['E-mail'] || '',
     joinTime: parseZoomDateTime(row['Ora di ingresso']),
     leaveTime: parseZoomDateTime(row['Ora di uscita']),
     duration: parseInt(row['Durata (minuti)']) || 0,
     isGuest: row['Guest'] === 'Sì',
+    isOrganizer: index === 0, // First participant is the organizer
   })).filter(p => p.name && p.joinTime && p.leaveTime);
+  
+  return participants;
 };
 
 const cleanParticipantName = (name: string): string => {
@@ -78,43 +81,63 @@ const parseZoomDateTime = (dateTimeStr: string): Date => {
 export const processParticipants = (
   morningParticipants: ZoomParticipant[],
   afternoonParticipants: ZoomParticipant[]
-): ProcessedParticipant[] => {
+): { participants: ProcessedParticipant[], organizer: ProcessedParticipant | null } => {
   const participantMap = new Map<string, ProcessedParticipant>();
+  let organizer: ProcessedParticipant | null = null;
+  
+  // Helper function to create participant entry
+  const createParticipant = (participant: ZoomParticipant): ProcessedParticipant => ({
+    name: participant.name,
+    email: participant.email,
+    totalAbsenceMinutes: 0,
+    isPresent: false,
+    isOrganizer: participant.isOrganizer,
+    allConnections: {
+      morning: [],
+      afternoon: []
+    },
+    sessions: {
+      morning: [],
+      afternoon: []
+    }
+  });
   
   // Process morning participants
   morningParticipants.forEach(participant => {
     const key = participant.name.toLowerCase();
     if (!participantMap.has(key)) {
-      participantMap.set(key, {
-        name: participant.name,
-        email: participant.email,
-        totalAbsenceMinutes: 0,
-        isPresent: false,
-        sessions: {
-          morning: [],
-          afternoon: []
-        }
-      });
+      participantMap.set(key, createParticipant(participant));
     }
-    participantMap.get(key)!.sessions.morning.push(participant);
+    const processedParticipant = participantMap.get(key)!;
+    processedParticipant.sessions.morning.push(participant);
+    processedParticipant.allConnections.morning.push({
+      joinTime: participant.joinTime,
+      leaveTime: participant.leaveTime
+    });
+    
+    // Set organizer (first participant found)
+    if (participant.isOrganizer && !organizer) {
+      organizer = processedParticipant;
+    }
   });
   
   // Process afternoon participants
   afternoonParticipants.forEach(participant => {
     const key = participant.name.toLowerCase();
     if (!participantMap.has(key)) {
-      participantMap.set(key, {
-        name: participant.name,
-        email: participant.email,
-        totalAbsenceMinutes: 0,
-        isPresent: false,
-        sessions: {
-          morning: [],
-          afternoon: []
-        }
-      });
+      participantMap.set(key, createParticipant(participant));
     }
-    participantMap.get(key)!.sessions.afternoon.push(participant);
+    const processedParticipant = participantMap.get(key)!;
+    processedParticipant.sessions.afternoon.push(participant);
+    processedParticipant.allConnections.afternoon.push({
+      joinTime: participant.joinTime,
+      leaveTime: participant.leaveTime
+    });
+    
+    // Set organizer (first participant found)
+    if (participant.isOrganizer && !organizer) {
+      organizer = processedParticipant;
+    }
   });
   
   // Calculate attendance for each participant
@@ -122,7 +145,10 @@ export const processParticipants = (
     return calculateAttendance(participant);
   });
   
-  return processed.sort((a, b) => a.name.localeCompare(b.name));
+  // Filter out organizer from participants list
+  const participants = processed.filter(p => !p.isOrganizer).sort((a, b) => a.name.localeCompare(b.name));
+  
+  return { participants, organizer };
 };
 
 const calculateAttendance = (participant: ProcessedParticipant): ProcessedParticipant => {
