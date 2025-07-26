@@ -33,7 +33,7 @@ export interface WordTemplateData {
   day: string;
   month: string;
   year: string;
-  orarioLezione: string;
+  orariolezione: string;
   argomento: string;
   nome1?: string;
   nome2?: string;

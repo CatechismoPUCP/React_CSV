@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { ParticipantEditor } from './components/ParticipantEditor';
 import { DebugInfo } from './components/DebugInfo';
+import { AttendanceDashboard } from './components/AttendanceDashboard';
 import { parseZoomCSV, processParticipants } from './utils/csvParser';
 import { generateWordDocument } from './utils/wordGenerator';
 import { ProcessedParticipant, LessonType, LessonData } from './types';
@@ -243,6 +244,23 @@ function App() {
               participants={participants}
               onParticipantsChange={setParticipants}
               lessonType={lessonType}
+            />
+
+            <AttendanceDashboard
+              participants={participants}
+              lessonType={lessonType}
+              lessonDate={(() => {
+                // Extract date from filename (assuming format like "Mattina_2025_07_08.csv")
+                const dateFile = morningFile || afternoonFile;
+                if (dateFile) {
+                  const dateMatch = dateFile.name.match(/(\d{4})_(\d{2})_(\d{2})/);
+                  if (dateMatch) {
+                    const [, year, month, day] = dateMatch;
+                    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  }
+                }
+                return new Date();
+              })()}
             />
 
             {debugMode && (
