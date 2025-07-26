@@ -1,0 +1,302 @@
+import React, { useState } from 'react';
+import { FileUpload } from './components/FileUpload';
+import { ParticipantEditor } from './components/ParticipantEditor';
+import { DebugInfo } from './components/DebugInfo';
+import { parseZoomCSV, processParticipants } from './utils/csvParser';
+import { generateWordDocument } from './utils/wordGenerator';
+import { ProcessedParticipant, LessonType, LessonData } from './types';
+import { FiFileText, FiCalendar, FiDownload, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import './App.css';
+
+function App() {
+  const [lessonType, setLessonType] = useState<LessonType>('both');
+  const [morningFile, setMorningFile] = useState<File | null>(null);
+  const [afternoonFile, setAfternoonFile] = useState<File | null>(null);
+  const [templateFile, setTemplateFile] = useState<File | null>(null);
+  const [subject, setSubject] = useState('');
+  const [participants, setParticipants] = useState<ProcessedParticipant[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<'upload' | 'edit' | 'generate'>('upload');
+  const [debugMode, setDebugMode] = useState(false);
+
+  const handleFileProcessing = async () => {
+    if (!templateFile || !subject.trim()) {
+      setError('Seleziona il template Word e inserisci l\'argomento della lezione');
+      return;
+    }
+
+    if (lessonType === 'both' && (!morningFile || !afternoonFile)) {
+      setError('Per lezioni complete, carica entrambi i file CSV');
+      return;
+    }
+
+    if (lessonType === 'morning' && !morningFile) {
+      setError('Carica il file CSV della mattina');
+      return;
+    }
+
+    if (lessonType === 'afternoon' && !afternoonFile) {
+      setError('Carica il file CSV del pomeriggio');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      let morningParticipants: any[] = [];
+      let afternoonParticipants: any[] = [];
+
+      // Parse morning CSV if needed
+      if (morningFile && (lessonType === 'morning' || lessonType === 'both')) {
+        const morningContent = await morningFile.text();
+        morningParticipants = parseZoomCSV(morningContent);
+      }
+
+      // Parse afternoon CSV if needed
+      if (afternoonFile && (lessonType === 'afternoon' || lessonType === 'both')) {
+        const afternoonContent = await afternoonFile.text();
+        afternoonParticipants = parseZoomCSV(afternoonContent);
+      }
+
+      // Process participants
+      const processedParticipants = processParticipants(morningParticipants, afternoonParticipants);
+      setParticipants(processedParticipants);
+      setStep('edit');
+    } catch (err) {
+      setError('Errore durante l\'elaborazione dei file CSV: ' + (err as Error).message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleGenerateDocument = async () => {
+    if (!templateFile) {
+      setError('Template Word non selezionato');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      // Extract date from filename (assuming format like "Mattina_2025_07_08.csv")
+      const dateFile = morningFile || afternoonFile;
+      let lessonDate = new Date();
+      
+      if (dateFile) {
+        const dateMatch = dateFile.name.match(/(\d{4})_(\d{2})_(\d{2})/);
+        if (dateMatch) {
+          const [, year, month, day] = dateMatch;
+          lessonDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        }
+      }
+
+      const lessonData: LessonData = {
+        date: lessonDate,
+        subject: subject.trim(),
+        participants: participants,
+        lessonType: lessonType
+      };
+
+      await generateWordDocument(lessonData, templateFile);
+      setStep('generate');
+    } catch (err) {
+      const errorMessage = (err as Error).message;
+      if (errorMessage.includes('template') || errorMessage.includes('placeholder')) {
+        setError(
+          `Errore nel template Word: ${errorMessage}\n\n` +
+          'Verifica che il template contenga tutti i placeholder richiesti:\n' +
+          '{{day}}, {{month}}, {{year}}, {{orarioLezione}}, {{argomento}}\n' +
+          '{{nome1}}-{{nome5}}, {{MattOraIn1}}-{{MattOraIn5}}, ecc.\n\n' +
+          'Consulta TEMPLATE_GUIDE.md per maggiori dettagli.'
+        );
+      } else {
+        setError('Errore durante la generazione del documento: ' + errorMessage);
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const resetApp = () => {
+    setStep('upload');
+    setParticipants([]);
+    setError(null);
+  };
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <h1>
+          <FiFileText size={32} />
+          Generatore Registro Presenza Zoom
+        </h1>
+        <p>Genera automaticamente registri di presenza in formato Word dai report CSV di Zoom</p>
+      </header>
+
+      <main className="app-main">
+        {error && (
+          <div className="error-message">
+            <FiAlertCircle size={20} />
+            <span>{error}</span>
+            <button onClick={() => setError(null)}>×</button>
+          </div>
+        )}
+
+        {step === 'upload' && (
+          <div className="upload-section">
+            <div className="lesson-type-selector">
+              <h3>Tipo di Lezione</h3>
+              <div className="radio-group">
+                <label>
+                  <input
+                    type="radio"
+                    value="morning"
+                    checked={lessonType === 'morning'}
+                    onChange={(e) => setLessonType(e.target.value as LessonType)}
+                  />
+                  <span>Solo Mattina (09:00-13:00)</span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    value="afternoon"
+                    checked={lessonType === 'afternoon'}
+                    onChange={(e) => setLessonType(e.target.value as LessonType)}
+                  />
+                  <span>Solo Pomeriggio (14:00-18:00)</span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    value="both"
+                    checked={lessonType === 'both'}
+                    onChange={(e) => setLessonType(e.target.value as LessonType)}
+                  />
+                  <span>Entrambi (09:00-13:00 / 14:00-18:00)</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="file-uploads">
+              {(lessonType === 'morning' || lessonType === 'both') && (
+                <FileUpload
+                  label="File CSV Mattina"
+                  accept=".csv"
+                  onFileSelect={setMorningFile}
+                  selectedFile={morningFile || undefined}
+                  icon={<FiCalendar size={24} />}
+                  required
+                />
+              )}
+
+              {(lessonType === 'afternoon' || lessonType === 'both') && (
+                <FileUpload
+                  label="File CSV Pomeriggio"
+                  accept=".csv"
+                  onFileSelect={setAfternoonFile}
+                  selectedFile={afternoonFile || undefined}
+                  icon={<FiCalendar size={24} />}
+                  required
+                />
+              )}
+
+              <FileUpload
+                label="Template Word (.docx)"
+                accept=".docx"
+                onFileSelect={setTemplateFile}
+                selectedFile={templateFile || undefined}
+                icon={<FiFileText size={24} />}
+                required
+              />
+            </div>
+
+            <div className="subject-input">
+              <label htmlFor="subject">
+                Argomento della Lezione <span className="required">*</span>
+              </label>
+              <input
+                id="subject"
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Es: AI: Intelligenza Artificiale"
+                required
+              />
+            </div>
+
+            <button
+              className="process-button"
+              onClick={handleFileProcessing}
+              disabled={isProcessing}
+            >
+              {isProcessing ? 'Elaborazione...' : 'Elabora File CSV'}
+            </button>
+          </div>
+        )}
+
+        {step === 'edit' && (
+          <div className="edit-section">
+            <ParticipantEditor
+              participants={participants}
+              onParticipantsChange={setParticipants}
+              lessonType={lessonType}
+            />
+
+            {debugMode && (
+              <DebugInfo 
+                lessonData={{
+                  date: new Date(),
+                  subject: subject,
+                  participants: participants,
+                  lessonType: lessonType
+                }}
+                templateData={{}}
+              />
+            )}
+
+            <div className="edit-actions">
+              <button className="back-button" onClick={resetApp}>
+                Torna Indietro
+              </button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input 
+                  type="checkbox" 
+                  checked={debugMode} 
+                  onChange={(e) => setDebugMode(e.target.checked)} 
+                />
+                Debug Mode
+              </label>
+              <button
+                className="generate-button"
+                onClick={handleGenerateDocument}
+                disabled={isProcessing}
+              >
+                <FiDownload size={20} />
+                {isProcessing ? 'Generazione...' : 'Genera Registro Word'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'generate' && (
+          <div className="success-section">
+            <div className="success-message">
+              <FiCheckCircle size={48} />
+              <h3>Registro Generato con Successo!</h3>
+              <p>Il file Word è stato scaricato automaticamente.</p>
+            </div>
+
+            <button className="new-document-button" onClick={resetApp}>
+              Genera Nuovo Registro
+            </button>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;
