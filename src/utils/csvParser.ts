@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import { ZoomParticipant, ProcessedParticipant } from '../types';
+import { LESSON_HOURS } from '../constants';
 
 export const parseZoomCSV = (csvContent: string): ZoomParticipant[] => {
   const lines = csvContent.split('\n');
@@ -172,9 +173,9 @@ const calculateAttendance = (participant: ProcessedParticipant): ProcessedPartic
   // Calculate total absence minutes
   let totalAbsence = 0;
   
-  // Morning session absences (09:00 - 13:00)
+  // Morning session absences
   if (morning.length > 0) {
-    totalAbsence += calculateSessionAbsences(morning, 9, 13);
+    totalAbsence += calculateSessionAbsences(morning, LESSON_HOURS.MORNING.START, LESSON_HOURS.MORNING.END);
   } else if (afternoon.length > 0) {
     // If only afternoon, don't count morning as absence
     totalAbsence += 0;
@@ -183,9 +184,9 @@ const calculateAttendance = (participant: ProcessedParticipant): ProcessedPartic
     totalAbsence = 999; // Mark as definitely absent
   }
   
-  // Afternoon session absences (14:00 - 18:00)
+  // Afternoon session absences
   if (afternoon.length > 0) {
-    totalAbsence += calculateSessionAbsences(afternoon, 14, 18);
+    totalAbsence += calculateSessionAbsences(afternoon, LESSON_HOURS.AFTERNOON.START, LESSON_HOURS.AFTERNOON.END);
   } else if (morning.length > 0) {
     // If only morning, don't count afternoon as absence
     totalAbsence += 0;
