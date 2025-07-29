@@ -58,6 +58,7 @@ export const EditSection: React.FC<EditSectionProps> = ({
         organizer={organizer || undefined}
         onParticipantsChange={onParticipantsChange}
         lessonType={lessonType}
+        lessonDate={lessonDate}
       />
 
       <AttendanceDashboard

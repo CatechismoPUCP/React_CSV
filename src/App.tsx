@@ -117,7 +117,10 @@ function App() {
         )}
 
         {appState.step === APP_STEPS.GENERATE && (
-          <SuccessSection onNewDocument={appState.resetApp} />
+          <SuccessSection 
+            onNewDocument={appState.resetApp}
+            onReturnToDashboard={() => appState.setStep(APP_STEPS.EDIT)}
+          />
         )}
       </main>
       

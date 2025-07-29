@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import { ProcessedParticipant } from '../types';
 import { MdDragIndicator } from 'react-icons/md';
 import { FiClock, FiCheckCircle, FiXCircle, FiPlus, FiTrash2, FiArrowUp, FiArrowDown } from 'react-icons/fi';
+import { AliasManager } from './AliasManager';
+import { ConnectionsLog } from './ConnectionsLog';
 
 interface ParticipantEditorProps {
   participants: ProcessedParticipant[];
   organizer?: ProcessedParticipant;
   onParticipantsChange: (participants: ProcessedParticipant[]) => void;
   lessonType: 'morning' | 'afternoon' | 'both';
+  lessonDate?: Date;
 }
 
 interface ParticipantItemProps {
@@ -130,9 +133,12 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
   participants,
   organizer,
   onParticipantsChange,
-  lessonType
+  lessonType,
+  lessonDate = new Date()
 }) => {
   const [newParticipantName, setNewParticipantName] = useState('');
+  const [showAliasManager, setShowAliasManager] = useState(false);
+  const [showConnectionsLog, setShowConnectionsLog] = useState(false);
 
   const moveParticipantUp = (index: number) => {
     if (index > 0) {
@@ -188,6 +194,47 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
     onParticipantsChange(updated);
   };
 
+  const mergeParticipants = (primaryIndex: number, aliasIndices: number[]) => {
+    const updated = [...participants];
+    const primaryParticipant = updated[primaryIndex];
+    
+    // Merge all connections from aliases into primary participant
+    aliasIndices.forEach(aliasIndex => {
+      const aliasParticipant = updated[aliasIndex];
+      
+      // Merge morning connections
+      primaryParticipant.allConnections.morning.push(...aliasParticipant.allConnections.morning);
+      primaryParticipant.sessions.morning.push(...aliasParticipant.sessions.morning);
+      
+      // Merge afternoon connections
+      primaryParticipant.allConnections.afternoon.push(...aliasParticipant.allConnections.afternoon);
+      primaryParticipant.sessions.afternoon.push(...aliasParticipant.sessions.afternoon);
+    });
+    
+    // Sort connections by time
+    primaryParticipant.allConnections.morning.sort((a, b) => a.joinTime.getTime() - b.joinTime.getTime());
+    primaryParticipant.allConnections.afternoon.sort((a, b) => a.joinTime.getTime() - b.joinTime.getTime());
+    
+    // Recalculate first join and last leave times
+    if (primaryParticipant.allConnections.morning.length > 0) {
+      primaryParticipant.morningFirstJoin = primaryParticipant.allConnections.morning[0].joinTime;
+      primaryParticipant.morningLastLeave = primaryParticipant.allConnections.morning[primaryParticipant.allConnections.morning.length - 1].leaveTime;
+    }
+    
+    if (primaryParticipant.allConnections.afternoon.length > 0) {
+      primaryParticipant.afternoonFirstJoin = primaryParticipant.allConnections.afternoon[0].joinTime;
+      primaryParticipant.afternoonLastLeave = primaryParticipant.allConnections.afternoon[primaryParticipant.allConnections.afternoon.length - 1].leaveTime;
+    }
+    
+    // Remove alias participants (in reverse order to maintain indices)
+    const sortedAliasIndices = [...aliasIndices].sort((a, b) => b - a);
+    sortedAliasIndices.forEach(index => {
+      updated.splice(index, 1);
+    });
+    
+    onParticipantsChange(updated);
+  };
+
   const formatTime = (date?: Date) => {
     if (!date) return '--:--';
     return date.toLocaleTimeString('it-IT', { 
@@ -238,7 +285,23 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
         <h3>Partecipanti Trovati ({participants.length})</h3>
         <p className="section-description">
           Usa le frecce per riordinare i partecipanti. Solo i primi 5 saranno inclusi nel registro.
+          <br />
+          <strong>Nota:</strong> La presenza è valida per un massimo di 15 minuti di assenza consecutiva.
         </p>
+        <div className="section-actions">
+          <button 
+            className="action-btn"
+            onClick={() => setShowAliasManager(!showAliasManager)}
+          >
+            {showAliasManager ? 'Nascondi' : 'Gestisci'} Alias
+          </button>
+          <button 
+            className="action-btn"
+            onClick={() => setShowConnectionsLog(!showConnectionsLog)}
+          >
+            {showConnectionsLog ? 'Nascondi' : 'Mostra'} Registro Connessioni
+          </button>
+        </div>
       </div>
 
       <div className="participants-list">
@@ -272,6 +335,22 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {showAliasManager && (
+        <AliasManager
+          participants={participants}
+          onMergeParticipants={mergeParticipants}
+        />
+      )}
+
+      {showConnectionsLog && (
+        <ConnectionsLog
+          participants={participants}
+          organizer={organizer}
+          lessonType={lessonType}
+          lessonDate={lessonDate}
+        />
+      )}
     </div>
   );
 };
