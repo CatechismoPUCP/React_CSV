@@ -313,25 +313,41 @@ const formatTimeWithSeconds = (date: Date): string => {
   return format(date, 'HH:mm:ss');
 };
 
-// Format all connections for a participant
+// Format all connections for a participant including aliases
 const formatAllConnections = (participant: ProcessedParticipant, lessonType: 'morning' | 'afternoon' | 'both'): string => {
-  const connections: string[] = [];
+  const allConnectionsText: string[] = [];
+  
+  // Main participant connections
+  const mainConnections: string[] = [];
   
   // Morning connections
   if (lessonType !== 'afternoon' && participant.allConnections.morning.length > 0) {
     const morningConnections = participant.allConnections.morning
       .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
-      .join(', ');
-    connections.push(`Mattina: ${morningConnections}`);
+      .join('; ');
+    mainConnections.push(morningConnections);
   }
   
   // Afternoon connections
   if (lessonType !== 'morning' && participant.allConnections.afternoon.length > 0) {
     const afternoonConnections = participant.allConnections.afternoon
       .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
-      .join(', ');
-    connections.push(`Pomeriggio: ${afternoonConnections}`);
+      .join('; ');
+    mainConnections.push(afternoonConnections);
   }
   
-  return connections.length > 0 ? connections.join(' | ') : 'Nessuna connessione';
+  if (mainConnections.length > 0) {
+    allConnectionsText.push(`${participant.name}: ${mainConnections.join(' | ')}`);
+  }
+  
+  // Add alias connections
+  if (participant.aliases && participant.aliases.length > 0) {
+    participant.aliases.forEach(alias => {
+      if (alias.connectionsList && alias.connectionsList !== '') {
+        allConnectionsText.push(`${alias.name}: ${alias.connectionsList}`);
+      }
+    });
+  }
+  
+  return allConnectionsText.length > 0 ? allConnectionsText.join(' || ') : 'Nessuna connessione';
 };

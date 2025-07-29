@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { ProcessedParticipant } from '../types';
 import { MdDragIndicator } from 'react-icons/md';
-import { FiClock, FiCheckCircle, FiXCircle, FiPlus, FiTrash2, FiArrowUp, FiArrowDown } from 'react-icons/fi';
-import { AliasManager } from './AliasManager';
+import { FiClock, FiCheckCircle, FiXCircle, FiPlus, FiTrash2, FiArrowUp, FiArrowDown, FiUsers } from 'react-icons/fi';
 import { ConnectionsLog } from './ConnectionsLog';
 
 interface ParticipantEditorProps {
@@ -22,6 +21,9 @@ interface ParticipantItemProps {
   onRemove: (index: number) => void;
   onMoveUp: (index: number) => void;
   onMoveDown: (index: number) => void;
+  onMergeWith: (targetIndex: number, sourceIndex: number) => void;
+  mergeMode: boolean;
+  selectedForMerge: number | null;
 }
 
 const ParticipantItem: React.FC<ParticipantItemProps> = ({
@@ -33,6 +35,9 @@ const ParticipantItem: React.FC<ParticipantItemProps> = ({
   onRemove,
   onMoveUp,
   onMoveDown,
+  onMergeWith,
+  mergeMode,
+  selectedForMerge,
 }) => {
   const formatTime = (date?: Date) => {
     if (!date) return '--:--';
@@ -42,8 +47,15 @@ const ParticipantItem: React.FC<ParticipantItemProps> = ({
     });
   };
 
+  const isMergeTarget = mergeMode && selectedForMerge === index;
+  const canMergeWith = mergeMode && selectedForMerge !== null && selectedForMerge !== index;
+
   return (
-    <div className={`participant-item ${index < 5 ? 'included' : 'excluded'}`}>
+    <div className={`participant-item ${index < 5 ? 'included' : 'excluded'} ${
+      isMergeTarget ? 'merge-target' : ''
+    } ${canMergeWith ? 'merge-candidate' : ''}`}
+    onClick={canMergeWith ? () => onMergeWith(selectedForMerge!, index) : undefined}
+    style={{ cursor: canMergeWith ? 'pointer' : 'default' }}>
       <div className="participant-controls">
         <span className="participant-number">#{index + 1}</span>
         <div className="move-buttons">
@@ -111,13 +123,33 @@ const ParticipantItem: React.FC<ParticipantItemProps> = ({
           )}
         </button>
 
-        <button
-          className="remove-participant"
-          onClick={() => onRemove(index)}
-          title="Rimuovi partecipante"
-        >
-          <FiTrash2 size={16} />
-        </button>
+        {mergeMode ? (
+          <button
+            className={`merge-button ${isMergeTarget ? 'selected' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isMergeTarget) {
+                // Deselect if already selected
+                onMergeWith(-1, index);
+              } else {
+                // Select as merge target
+                onMergeWith(index, -1);
+              }
+            }}
+            title={isMergeTarget ? 'Deseleziona' : 'Seleziona come destinazione merge'}
+          >
+            <FiUsers size={16} />
+            {isMergeTarget ? 'Destinazione' : 'Seleziona'}
+          </button>
+        ) : (
+          <button
+            className="remove-participant"
+            onClick={() => onRemove(index)}
+            title="Rimuovi partecipante"
+          >
+            <FiTrash2 size={16} />
+          </button>
+        )}
       </div>
 
       {index >= 5 && (
@@ -137,8 +169,9 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
   lessonDate = new Date()
 }) => {
   const [newParticipantName, setNewParticipantName] = useState('');
-  const [showAliasManager, setShowAliasManager] = useState(false);
   const [showConnectionsLog, setShowConnectionsLog] = useState(false);
+  const [mergeMode, setMergeMode] = useState(false);
+  const [selectedForMerge, setSelectedForMerge] = useState<number | null>(null);
 
   const moveParticipantUp = (index: number) => {
     if (index > 0) {
@@ -194,45 +227,95 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
     onParticipantsChange(updated);
   };
 
-  const mergeParticipants = (primaryIndex: number, aliasIndices: number[]) => {
-    const updated = [...participants];
-    const primaryParticipant = updated[primaryIndex];
+  const handleMergeWith = (targetIndex: number, sourceIndex: number) => {
+    if (targetIndex === -1) {
+      // Deselect
+      setSelectedForMerge(null);
+      return;
+    }
     
-    // Merge all connections from aliases into primary participant
-    aliasIndices.forEach(aliasIndex => {
-      const aliasParticipant = updated[aliasIndex];
-      
-      // Merge morning connections
-      primaryParticipant.allConnections.morning.push(...aliasParticipant.allConnections.morning);
-      primaryParticipant.sessions.morning.push(...aliasParticipant.sessions.morning);
-      
-      // Merge afternoon connections
-      primaryParticipant.allConnections.afternoon.push(...aliasParticipant.allConnections.afternoon);
-      primaryParticipant.sessions.afternoon.push(...aliasParticipant.sessions.afternoon);
+    if (sourceIndex === -1) {
+      // Select target
+      setSelectedForMerge(targetIndex);
+      return;
+    }
+    
+    // Perform merge
+    const updated = [...participants];
+    const targetParticipant = updated[targetIndex];
+    const sourceParticipant = updated[sourceIndex];
+    
+    // Create alias list for the target participant
+    if (!targetParticipant.aliases) {
+      targetParticipant.aliases = [];
+    }
+    
+    // Add source participant as alias with its connection list
+    const sourceConnectionsList = formatParticipantConnections(sourceParticipant, lessonType);
+    targetParticipant.aliases.push({
+      name: sourceParticipant.name,
+      connectionsList: sourceConnectionsList
     });
+    
+    // Merge all connections from source into target participant
+    targetParticipant.allConnections.morning.push(...sourceParticipant.allConnections.morning);
+    targetParticipant.sessions.morning.push(...sourceParticipant.sessions.morning);
+    targetParticipant.allConnections.afternoon.push(...sourceParticipant.allConnections.afternoon);
+    targetParticipant.sessions.afternoon.push(...sourceParticipant.sessions.afternoon);
     
     // Sort connections by time
-    primaryParticipant.allConnections.morning.sort((a, b) => a.joinTime.getTime() - b.joinTime.getTime());
-    primaryParticipant.allConnections.afternoon.sort((a, b) => a.joinTime.getTime() - b.joinTime.getTime());
+    targetParticipant.allConnections.morning.sort((a, b) => a.joinTime.getTime() - b.joinTime.getTime());
+    targetParticipant.allConnections.afternoon.sort((a, b) => a.joinTime.getTime() - b.joinTime.getTime());
     
     // Recalculate first join and last leave times
-    if (primaryParticipant.allConnections.morning.length > 0) {
-      primaryParticipant.morningFirstJoin = primaryParticipant.allConnections.morning[0].joinTime;
-      primaryParticipant.morningLastLeave = primaryParticipant.allConnections.morning[primaryParticipant.allConnections.morning.length - 1].leaveTime;
+    if (targetParticipant.allConnections.morning.length > 0) {
+      targetParticipant.morningFirstJoin = targetParticipant.allConnections.morning[0].joinTime;
+      targetParticipant.morningLastLeave = targetParticipant.allConnections.morning[targetParticipant.allConnections.morning.length - 1].leaveTime;
     }
     
-    if (primaryParticipant.allConnections.afternoon.length > 0) {
-      primaryParticipant.afternoonFirstJoin = primaryParticipant.allConnections.afternoon[0].joinTime;
-      primaryParticipant.afternoonLastLeave = primaryParticipant.allConnections.afternoon[primaryParticipant.allConnections.afternoon.length - 1].leaveTime;
+    if (targetParticipant.allConnections.afternoon.length > 0) {
+      targetParticipant.afternoonFirstJoin = targetParticipant.allConnections.afternoon[0].joinTime;
+      targetParticipant.afternoonLastLeave = targetParticipant.allConnections.afternoon[targetParticipant.allConnections.afternoon.length - 1].leaveTime;
     }
     
-    // Remove alias participants (in reverse order to maintain indices)
-    const sortedAliasIndices = [...aliasIndices].sort((a, b) => b - a);
-    sortedAliasIndices.forEach(index => {
-      updated.splice(index, 1);
-    });
+    // Remove source participant
+    updated.splice(sourceIndex, 1);
+    
+    // Reset merge mode
+    setMergeMode(false);
+    setSelectedForMerge(null);
     
     onParticipantsChange(updated);
+  };
+  
+  const formatParticipantConnections = (participant: ProcessedParticipant, lessonType: 'morning' | 'afternoon' | 'both'): string => {
+    const connections: string[] = [];
+    
+    // Morning connections
+    if (lessonType !== 'afternoon' && participant.allConnections.morning.length > 0) {
+      const morningTimes = participant.allConnections.morning
+        .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
+        .join('; ');
+      connections.push(morningTimes);
+    }
+    
+    // Afternoon connections
+    if (lessonType !== 'morning' && participant.allConnections.afternoon.length > 0) {
+      const afternoonTimes = participant.allConnections.afternoon
+        .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
+        .join('; ');
+      connections.push(afternoonTimes);
+    }
+    
+    return connections.join(' | ');
+  };
+  
+  const formatTimeWithSeconds = (date: Date): string => {
+    return date.toLocaleTimeString('it-IT', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
   };
 
   const formatTime = (date?: Date) => {
@@ -290,10 +373,14 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
         </p>
         <div className="section-actions">
           <button 
-            className="action-btn"
-            onClick={() => setShowAliasManager(!showAliasManager)}
+            className={`action-btn ${mergeMode ? 'active' : ''}`}
+            onClick={() => {
+              setMergeMode(!mergeMode);
+              setSelectedForMerge(null);
+            }}
           >
-            {showAliasManager ? 'Nascondi' : 'Gestisci'} Alias
+            <FiUsers size={16} />
+            {mergeMode ? 'Annulla Merge' : 'Unisci Partecipanti'}
           </button>
           <button 
             className="action-btn"
@@ -303,6 +390,15 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {mergeMode && (
+        <div className="merge-instructions">
+          <p>🔄 <strong>Modalità Unione Attiva:</strong></p>
+          <p>1. Clicca "Seleziona" sul partecipante principale (destinazione)</p>
+          <p>2. Clicca su un altro partecipante per unirlo al principale</p>
+          <p>3. Tutte le connessioni verranno unite e salvate nel documento</p>
+        </div>
+      )}
 
       <div className="participants-list">
         {participants.map((participant, index) => (
@@ -316,6 +412,9 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
             onRemove={removeParticipant}
             onMoveUp={moveParticipantUp}
             onMoveDown={moveParticipantDown}
+            onMergeWith={handleMergeWith}
+            mergeMode={mergeMode}
+            selectedForMerge={selectedForMerge}
           />
         ))}
       </div>
@@ -335,13 +434,6 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
           </button>
         </div>
       </div>
-
-      {showAliasManager && (
-        <AliasManager
-          participants={participants}
-          onMergeParticipants={mergeParticipants}
-        />
-      )}
 
       {showConnectionsLog && (
         <ConnectionsLog

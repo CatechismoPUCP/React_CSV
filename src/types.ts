@@ -27,6 +27,10 @@ export interface ProcessedParticipant {
     morning: ZoomParticipant[];
     afternoon: ZoomParticipant[];
   };
+  aliases?: Array<{
+    name: string;
+    connectionsList: string;
+  }>;
 }
 
 export interface LessonData {
