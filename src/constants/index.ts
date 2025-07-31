@@ -43,3 +43,5 @@ export const ERROR_MESSAGES = {
 export const TEMPLATE_FILENAME_PATTERN = 'modello B fad_{ID_CORSO}_{START_DATE}.docx';
 
 export const DATE_REGEX = /(\d{4})_(\d{2})_(\d{2})/;
+
+export { UI_CONSTANTS } from './ui';

@@ -1,8 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FiCalendar, FiFileText, FiHelpCircle, FiInfo, FiZap } from 'react-icons/fi';
 import { FileUpload } from '../FileUpload';
-import { FastModeUpload } from '../upload/FastModeUpload';
-import { useUploadMode } from '../../hooks/useUploadMode';
 import { LessonType } from '../../types';
 
 interface UploadSectionProps {
@@ -40,13 +38,6 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   onProcessFiles,
   isProcessing,
 }) => {
-  const { uploadMode, toggleMode, isManualMode, isFastMode } = useUploadMode();
-
-  const handleFastModeAssignment = (morning: File, afternoon: File) => {
-    setMorningFile(morning);
-    setAfternoonFile(afternoon);
-  };
-
   const canProcess = () => {
     const hasRequiredFiles = (lessonType === 'morning' && morningFile) ||
                            (lessonType === 'afternoon' && afternoonFile) ||
@@ -57,34 +48,6 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
   return (
     <div className="upload-section">
-      {/* Upload Mode Toggle */}
-      <div className="section-card">
-        <div className="section-header">
-          <FiZap className="section-icon" />
-          <h3>Modalità Caricamento</h3>
-        </div>
-        <div className="upload-mode-toggle">
-          <button
-            onClick={toggleMode}
-            className={`mode-toggle ${isManualMode ? 'manual' : 'fast'}`}
-          >
-            {isManualMode ? (
-              <>
-                <FiFileText />
-                <span>Modalità Manuale</span>
-                <small>Carica file singolarmente</small>
-              </>
-            ) : (
-              <>
-                <FiZap />
-                <span>Modalità Veloce</span>
-                <small>Carica e assegna automaticamente</small>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
       {/* Lesson Type Selection */}
       <div className="section-card">
         <div className="section-header">
@@ -166,71 +129,61 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
       </div>
 
       {/* File Uploads */}
-      {isFastMode ? (
+      <div className="file-uploads">
+        {/* Morning File */}
+        {lessonType !== 'afternoon' && (
+          <div className="section-card">
+            <div className="section-header">
+              <FiFileText className="section-icon" />
+              <h3>File CSV Mattina</h3>
+            </div>
+            <FileUpload
+              accept=".csv"
+              onFileSelect={setMorningFile}
+              selectedFile={morningFile || undefined}
+              label="Seleziona file CSV della mattina"
+              icon={<FiCalendar size={24} />}
+            />
+          </div>
+        )}
+
+        {/* Afternoon File */}
+        {lessonType !== 'morning' && (
+          <div className="section-card">
+            <div className="section-header">
+              <FiFileText className="section-icon" />
+              <h3>File CSV Pomeriggio</h3>
+            </div>
+            <FileUpload
+              accept=".csv"
+              onFileSelect={setAfternoonFile}
+              selectedFile={afternoonFile || undefined}
+              label="Seleziona file CSV del pomeriggio"
+              icon={<FiCalendar size={24} />}
+            />
+          </div>
+        )}
+
+        {/* Template File */}
         <div className="section-card">
           <div className="section-header">
-            <FiZap className="section-icon" />
-            <h3>Caricamento Veloce</h3>
+            <FiFileText className="section-icon" />
+            <h3>Template Word</h3>
+            <button
+              onClick={onShowTemplateGuide}
+              className="help-button"
+              title="Guida al template"
+            >
+              <FiHelpCircle />
+            </button>
           </div>
-          <FastModeUpload onFilesAssigned={handleFastModeAssignment} />
+          <FileUpload
+            accept=".docx"
+            onFileSelect={setTemplateFile}
+            selectedFile={templateFile || undefined}
+            label="Seleziona template Word (.docx)"
+          />
         </div>
-      ) : (
-        <div className="file-uploads">
-          {/* Morning File */}
-          {lessonType !== 'afternoon' && (
-            <div className="section-card">
-              <div className="section-header">
-                <FiFileText className="section-icon" />
-                <h3>File CSV Mattina</h3>
-              </div>
-              <FileUpload
-                accept=".csv"
-                onFileSelect={setMorningFile}
-                selectedFile={morningFile || undefined}
-                label="Seleziona file CSV della mattina"
-                icon={<FiCalendar size={24} />}
-              />
-            </div>
-          )}
-
-          {/* Afternoon File */}
-          {lessonType !== 'morning' && (
-            <div className="section-card">
-              <div className="section-header">
-                <FiFileText className="section-icon" />
-                <h3>File CSV Pomeriggio</h3>
-              </div>
-              <FileUpload
-                accept=".csv"
-                onFileSelect={setAfternoonFile}
-                selectedFile={afternoonFile || undefined}
-                label="Seleziona file CSV del pomeriggio"
-                icon={<FiCalendar size={24} />}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Template File - Always shown */}
-      <div className="section-card">
-        <div className="section-header">
-          <FiFileText className="section-icon" />
-          <h3>Template Word</h3>
-          <button
-            onClick={onShowTemplateGuide}
-            className="help-button"
-            title="Guida al template"
-          >
-            <FiHelpCircle />
-          </button>
-        </div>
-        <FileUpload
-          accept=".docx"
-          onFileSelect={setTemplateFile}
-          selectedFile={templateFile || undefined}
-          label="Seleziona template Word (.docx)"
-        />
       </div>
 
       {/* Process Button */}

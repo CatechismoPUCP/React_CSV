@@ -5,18 +5,35 @@ interface FileUploadProps {
   label: string;
   accept: string;
   onFileSelect: (file: File) => void;
-  selectedFile?: File;
+  selectedFile?: File | null;
   icon?: React.ReactNode;
   required?: boolean;
+  multiple?: boolean;
+  disabled?: boolean;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({
+interface MultipleFileUploadProps {
+  label: string;
+  accept: string;
+  onFileSelect: (files: File[]) => void;
+  selectedFile?: never;
+  icon?: React.ReactNode;
+  required?: boolean;
+  multiple: true;
+  disabled?: boolean;
+}
+
+type FileUploadComponentProps = FileUploadProps | MultipleFileUploadProps;
+
+export const FileUpload: React.FC<FileUploadComponentProps> = ({
   label,
   accept,
   onFileSelect,
   selectedFile,
   icon,
-  required = false
+  required = false,
+  multiple = false,
+  disabled = false
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -25,9 +42,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      onFileSelect(file);
+    const files = event.target.files;
+    if (files) {
+      if (multiple) {
+        const fileArray = Array.from(files);
+        (onFileSelect as (files: File[]) => void)(fileArray);
+      } else {
+        const file = files[0];
+        if (file) {
+          (onFileSelect as (file: File) => void)(file);
+        }
+      }
     }
   };
 
@@ -37,8 +62,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         {label} {required && <span className="required">*</span>}
       </label>
       <div 
-        className={`file-upload-area ${selectedFile ? 'has-file' : ''}`}
-        onClick={handleClick}
+        className={`file-upload-area ${selectedFile ? 'has-file' : ''} ${disabled ? 'disabled' : ''}`}
+        onClick={disabled ? undefined : handleClick}
       >
         <input
           ref={fileInputRef}
@@ -46,6 +71,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           accept={accept}
           onChange={handleFileChange}
           style={{ display: 'none' }}
+          multiple={multiple}
+          disabled={disabled}
         />
         
         <div className="file-upload-content">
