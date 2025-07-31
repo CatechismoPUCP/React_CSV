@@ -44,13 +44,13 @@ export const useFileProcessing = () => {
       let afternoonParticipants: any[] = [];
 
       // Parse morning CSV if needed
-      if (morningFile && (lessonType === 'morning' || lessonType === 'both')) {
+      if (morningFile && (lessonType === 'morning' || lessonType === 'both' || lessonType === 'fast')) {
         const morningContent = await FileService.readFileAsText(morningFile);
         morningParticipants = parseZoomCSV(morningContent);
       }
 
       // Parse afternoon CSV if needed
-      if (afternoonFile && (lessonType === 'afternoon' || lessonType === 'both')) {
+      if (afternoonFile && (lessonType === 'afternoon' || lessonType === 'both' || lessonType === 'fast')) {
         const afternoonContent = await FileService.readFileAsText(afternoonFile);
         afternoonParticipants = parseZoomCSV(afternoonContent);
       }

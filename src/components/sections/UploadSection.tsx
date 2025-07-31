@@ -1,8 +1,9 @@
-import React from 'react';
-import { FiCalendar, FiFileText, FiHelpCircle, FiInfo } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { FiCalendar, FiFileText, FiHelpCircle, FiInfo, FiZap, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 import { FileUpload } from '../FileUpload';
-import { LessonType } from '../../types';
+import { LessonType, CSVAnalysis } from '../../types';
 import { FileService } from '../../services/fileService';
+import { autoAssignCSVFiles } from '../../utils/csvParser';
 
 interface UploadSectionProps {
   lessonType: LessonType;
@@ -39,6 +40,44 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   onProcessFiles,
   isProcessing,
 }) => {
+  const [fastModeFiles, setFastModeFiles] = useState<File[]>([]);
+  const [analysisResults, setAnalysisResults] = useState<Array<{ file: File; analysis: CSVAnalysis }>>([]);
+  const [analysisErrors, setAnalysisErrors] = useState<string[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleFastModeFiles = async (files: File[]) => {
+    setFastModeFiles(files);
+    setIsAnalyzing(true);
+    setAnalysisErrors([]);
+    
+    try {
+      const result = await autoAssignCSVFiles(files);
+      
+      // Auto-assign the detected files
+      if (result.morningFile) {
+        setMorningFile(result.morningFile);
+      }
+      if (result.afternoonFile) {
+        setAfternoonFile(result.afternoonFile);
+      }
+      
+      setAnalysisResults(result.analyses);
+      setAnalysisErrors(result.errors);
+      
+      // Auto-switch to 'both' mode if we have both files
+      if (result.morningFile && result.afternoonFile) {
+        setLessonType('both');
+      } else if (result.morningFile) {
+        setLessonType('morning');
+      } else if (result.afternoonFile) {
+        setLessonType('afternoon');
+      }
+    } catch (error) {
+      setAnalysisErrors([`Errore nell'analisi automatica: ${error}`]);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
   return (
     <div className="upload-section">
       <div className="lesson-type-selector">
@@ -78,30 +117,119 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             />
             <span>Entrambi (09:00-13:00 / 14:00-18:00)</span>
           </label>
+          <label>
+            <input
+              type="radio"
+              value="fast"
+              checked={lessonType === 'fast'}
+              onChange={(e) => setLessonType(e.target.value as LessonType)}
+            />
+            <span><FiZap className="inline-icon" /> Modalità Fast (Auto-riconoscimento)</span>
+          </label>
         </div>
       </div>
 
       <div className="file-uploads">
-        {(lessonType === 'morning' || lessonType === 'both') && (
-          <FileUpload
-            label="File CSV Mattina"
-            accept=".csv"
-            onFileSelect={setMorningFile}
-            selectedFile={morningFile || undefined}
-            icon={<FiCalendar size={24} />}
-            required
-          />
-        )}
+        {lessonType === 'fast' ? (
+          <div className="fast-mode-section">
+            <div className="fast-mode-info">
+              <FiZap className="icon" />
+              <div>
+                <h4>Modalità Fast - Auto-riconoscimento</h4>
+                <p>Carica 1 o 2 file CSV e il sistema determinerà automaticamente se sono della mattina o del pomeriggio basandosi sull'orario di inizio (discriminante: 13:00).</p>
+              </div>
+            </div>
+            
+            <div className="fast-upload">
+              <input
+                type="file"
+                id="fast-csv-files"
+                accept=".csv"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 0) {
+                    handleFastModeFiles(files);
+                  }
+                }}
+                style={{ display: 'none' }}
+              />
+              <label htmlFor="fast-csv-files" className="fast-upload-button">
+                <FiZap size={24} />
+                <span>Seleziona File CSV (1-2 file)</span>
+              </label>
+            </div>
 
-        {(lessonType === 'afternoon' || lessonType === 'both') && (
-          <FileUpload
-            label="File CSV Pomeriggio"
-            accept=".csv"
-            onFileSelect={setAfternoonFile}
-            selectedFile={afternoonFile || undefined}
-            icon={<FiCalendar size={24} />}
-            required
-          />
+            {isAnalyzing && (
+              <div className="analysis-status">
+                <div className="loading-spinner"></div>
+                <span>Analizzando i file...</span>
+              </div>
+            )}
+
+            {analysisResults.length > 0 && (
+              <div className="analysis-results">
+                <h4>Risultati Analisi:</h4>
+                {analysisResults.map((result, index) => (
+                  <div key={index} className={`analysis-item ${result.analysis.period}`}>
+                    <div className="analysis-icon">
+                      {result.analysis.period === 'morning' && <FiCheckCircle className="morning-icon" />}
+                      {result.analysis.period === 'afternoon' && <FiCheckCircle className="afternoon-icon" />}
+                      {result.analysis.period === 'unknown' && <FiAlertCircle className="unknown-icon" />}
+                    </div>
+                    <div className="analysis-details">
+                      <strong>{result.file.name}</strong>
+                      <span className="period-label">
+                        {result.analysis.period === 'morning' && 'Mattina'}
+                        {result.analysis.period === 'afternoon' && 'Pomeriggio'}
+                        {result.analysis.period === 'unknown' && 'Non riconosciuto'}
+                      </span>
+                      <small>
+                        Primo ingresso: {result.analysis.firstJoinTime.toLocaleTimeString('it-IT')} | 
+                        Partecipanti: {result.analysis.participantCount}
+                      </small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {analysisErrors.length > 0 && (
+              <div className="analysis-errors">
+                <h4>Avvisi:</h4>
+                {analysisErrors.map((error, index) => (
+                  <div key={index} className="error-item">
+                    <FiAlertCircle className="error-icon" />
+                    <span>{error}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {(lessonType === 'morning' || lessonType === 'both') && (
+              <FileUpload
+                label="File CSV Mattina"
+                accept=".csv"
+                onFileSelect={setMorningFile}
+                selectedFile={morningFile || undefined}
+                icon={<FiCalendar size={24} />}
+                required
+              />
+            )}
+
+            {(lessonType === 'afternoon' || lessonType === 'both') && (
+              <FileUpload
+                label="File CSV Pomeriggio"
+                accept=".csv"
+                onFileSelect={setAfternoonFile}
+                selectedFile={afternoonFile || undefined}
+                icon={<FiCalendar size={24} />}
+                required
+              />
+            )}
+          </>
         )}
 
         <div className="template-section">

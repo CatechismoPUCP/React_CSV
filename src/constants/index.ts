@@ -18,6 +18,7 @@ export const LESSON_TYPES = {
   MORNING: 'morning',
   AFTERNOON: 'afternoon',
   BOTH: 'both',
+  FAST: 'fast',
 } as const;
 
 export const APP_STEPS = {
@@ -31,6 +32,7 @@ export const ERROR_MESSAGES = {
   MISSING_BOTH_FILES: 'Per lezioni complete, carica entrambi i file CSV',
   MISSING_MORNING_FILE: 'Carica il file CSV della mattina',
   MISSING_AFTERNOON_FILE: 'Carica il file CSV del pomeriggio',
+  MISSING_FAST_FILES: 'In modalità Fast, carica almeno un file CSV',
   MISSING_TEMPLATE: 'Template Word non selezionato',
   CSV_PROCESSING_ERROR: 'Errore durante l\'elaborazione dei file CSV: ',
   DOCUMENT_GENERATION_ERROR: 'Errore durante la generazione del documento: ',

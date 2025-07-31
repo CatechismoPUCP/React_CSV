@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProcessedParticipant } from '../types';
+import { ProcessedParticipant, LessonType } from '../types';
 import { MdDragIndicator } from 'react-icons/md';
 import { FiClock, FiCheckCircle, FiXCircle, FiPlus, FiTrash2, FiArrowUp, FiArrowDown, FiUsers } from 'react-icons/fi';
 import { ConnectionsLog } from './ConnectionsLog';
@@ -8,15 +8,15 @@ interface ParticipantEditorProps {
   participants: ProcessedParticipant[];
   organizer?: ProcessedParticipant;
   onParticipantsChange: (participants: ProcessedParticipant[]) => void;
-  lessonType: 'morning' | 'afternoon' | 'both';
-  lessonDate?: Date;
+  lessonType: LessonType;
+  lessonDate: Date;
 }
 
 interface ParticipantItemProps {
   participant: ProcessedParticipant;
   index: number;
   totalCount: number;
-  lessonType: 'morning' | 'afternoon' | 'both';
+  lessonType: LessonType;
   onTogglePresence: (index: number) => void;
   onRemove: (index: number) => void;
   onMoveUp: (index: number) => void;
@@ -288,7 +288,7 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
     onParticipantsChange(updated);
   };
   
-  const formatParticipantConnections = (participant: ProcessedParticipant, lessonType: 'morning' | 'afternoon' | 'both'): string => {
+  const formatParticipantConnections = (participant: ProcessedParticipant, lessonType: LessonType): string => {
     const connections: string[] = [];
     
     // Morning connections

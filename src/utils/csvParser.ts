@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { ZoomParticipant, ProcessedParticipant } from '../types';
+import { ZoomParticipant, ProcessedParticipant, CSVAnalysis, CSVPeriod } from '../types';
 import { LESSON_HOURS } from '../constants';
 
 export const parseZoomCSV = (csvContent: string): ZoomParticipant[] => {
@@ -223,4 +223,120 @@ const calculateSessionAbsences = (
   }
   
   return Math.round(totalAbsence);
+};
+
+/**
+ * Analyzes a CSV file to determine if it contains morning or afternoon session data
+ * Uses 13:00 (1 PM) as the discriminant: before 13:00 = morning, after = afternoon
+ */
+export const analyzeCSVPeriod = (csvContent: string): CSVAnalysis => {
+  try {
+    const participants = parseZoomCSV(csvContent);
+    
+    if (participants.length === 0) {
+      throw new Error('Nessun partecipante trovato nel file CSV');
+    }
+
+    // Find the earliest join time and latest leave time
+    const joinTimes = participants.map(p => p.joinTime).filter(Boolean);
+    const leaveTimes = participants.map(p => p.leaveTime).filter(Boolean);
+    
+    if (joinTimes.length === 0) {
+      throw new Error('Nessun orario di ingresso valido trovato');
+    }
+
+    const firstJoinTime = new Date(Math.min(...joinTimes.map(d => d.getTime())));
+    const lastLeaveTime = new Date(Math.max(...leaveTimes.map(d => d.getTime())));
+    
+    // Determine period based on first join time
+    // If first person joins before 13:00 (1 PM), it's morning; otherwise afternoon
+    const firstJoinHour = firstJoinTime.getHours();
+    const period: CSVPeriod = firstJoinHour < 13 ? 'morning' : 'afternoon';
+    
+    return {
+      period,
+      firstJoinTime,
+      lastLeaveTime,
+      participantCount: participants.length
+    };
+  } catch (error) {
+    console.error('Errore nell\'analisi del CSV:', error);
+    return {
+      period: 'unknown',
+      firstJoinTime: new Date(),
+      lastLeaveTime: new Date(),
+      participantCount: 0
+    };
+  }
+};
+
+/**
+ * Analyzes multiple CSV files and automatically assigns them to morning/afternoon
+ * Returns an object with the files correctly assigned
+ */
+export const autoAssignCSVFiles = (files: File[]): Promise<{
+  morningFile: File | null;
+  afternoonFile: File | null;
+  analyses: Array<{ file: File; analysis: CSVAnalysis }>;
+  errors: string[];
+}> => {
+  return new Promise((resolve) => {
+    const analyses: Array<{ file: File; analysis: CSVAnalysis }> = [];
+    const errors: string[] = [];
+    let completed = 0;
+    
+    if (files.length === 0) {
+      resolve({ morningFile: null, afternoonFile: null, analyses: [], errors: ['Nessun file fornito'] });
+      return;
+    }
+    
+    files.forEach((file, index) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const csvContent = e.target?.result as string;
+          const analysis = analyzeCSVPeriod(csvContent);
+          analyses.push({ file, analysis });
+        } catch (error) {
+          errors.push(`Errore nell'analisi del file ${file.name}: ${error}`);
+          analyses.push({ 
+            file, 
+            analysis: { period: 'unknown', firstJoinTime: new Date(), lastLeaveTime: new Date(), participantCount: 0 }
+          });
+        }
+        
+        completed++;
+        if (completed === files.length) {
+          // Auto-assign files based on analysis
+          const morningFiles = analyses.filter(a => a.analysis.period === 'morning');
+          const afternoonFiles = analyses.filter(a => a.analysis.period === 'afternoon');
+          
+          // Take the first valid file for each period
+          const morningFile = morningFiles.length > 0 ? morningFiles[0].file : null;
+          const afternoonFile = afternoonFiles.length > 0 ? afternoonFiles[0].file : null;
+          
+          // Add warnings for multiple files of the same period
+          if (morningFiles.length > 1) {
+            errors.push(`Trovati ${morningFiles.length} file della mattina. Utilizzato: ${morningFile?.name}`);
+          }
+          if (afternoonFiles.length > 1) {
+            errors.push(`Trovati ${afternoonFiles.length} file del pomeriggio. Utilizzato: ${afternoonFile?.name}`);
+          }
+          
+          resolve({ morningFile, afternoonFile, analyses, errors });
+        }
+      };
+      
+      reader.onerror = () => {
+        errors.push(`Errore nella lettura del file ${file.name}`);
+        completed++;
+        if (completed === files.length) {
+          resolve({ morningFile: null, afternoonFile: null, analyses, errors });
+        }
+      };
+      
+      reader.readAsText(file);
+    });
+  });
 };

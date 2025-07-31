@@ -39,7 +39,7 @@ export interface LessonData {
   courseId?: string; // Made optional
   participants: ProcessedParticipant[];
   organizer?: ProcessedParticipant;
-  lessonType: 'morning' | 'afternoon' | 'both';
+  lessonType: LessonType;
   actualStartTime?: Date;
   actualEndTime?: Date;
   lessonHours: number[]; // Dynamic lesson hours based on actual data
@@ -83,4 +83,13 @@ export interface WordTemplateData {
   presenza5?: string;
 }
 
-export type LessonType = 'morning' | 'afternoon' | 'both';
+export type LessonType = 'morning' | 'afternoon' | 'both' | 'fast';
+
+export type CSVPeriod = 'morning' | 'afternoon' | 'unknown';
+
+export interface CSVAnalysis {
+  period: CSVPeriod;
+  firstJoinTime: Date;
+  lastLeaveTime: Date;
+  participantCount: number;
+}

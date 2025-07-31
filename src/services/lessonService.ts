@@ -35,6 +35,27 @@ export class LessonService {
           }
         });
       }
+      
+      // For fast mode, add hours from both sessions based on actual data
+      if (lessonType === 'fast') {
+        // Morning connections
+        participant.allConnections.morning.forEach(connection => {
+          const startHour = connection.joinTime.getHours();
+          const endHour = connection.leaveTime.getHours();
+          for (let h = startHour; h <= endHour; h++) {
+            hours.add(h);
+          }
+        });
+        
+        // Afternoon connections
+        participant.allConnections.afternoon.forEach(connection => {
+          const startHour = connection.joinTime.getHours();
+          const endHour = connection.leaveTime.getHours();
+          for (let h = startHour; h <= endHour; h++) {
+            hours.add(h);
+          }
+        });
+      }
     });
     
     return Array.from(hours).sort((a, b) => a - b);
@@ -52,6 +73,14 @@ export class LessonService {
   ): string | null {
     if (!templateFile || !subject.trim()) {
       return 'MISSING_TEMPLATE_OR_SUBJECT';
+    }
+
+    // Fast mode validation: at least one file must be present
+    if (lessonType === 'fast') {
+      if (!morningFile && !afternoonFile) {
+        return 'MISSING_FAST_FILES';
+      }
+      return null;
     }
 
     if (lessonType === 'both' && (!morningFile || !afternoonFile)) {

@@ -3,7 +3,7 @@ import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { LessonData, WordTemplateData, ProcessedParticipant } from '../types';
+import { LessonData, WordTemplateData, ProcessedParticipant, LessonType } from '../types';
 
 export const generateWordDocument = async (
   lessonData: LessonData,
@@ -186,13 +186,21 @@ const getActualSessionEndHour = (participants: ProcessedParticipant[], session: 
 };
 
 // Get lesson end time based on start time and lesson type
-const getLessonEndTime = (startTime: Date, lessonType: 'morning' | 'afternoon' | 'both'): Date => {
+const getLessonEndTime = (startTime: Date, lessonType: LessonType): Date => {
   const endTime = new Date(startTime);
   
   if (lessonType === 'morning') {
     endTime.setHours(13, 0, 0, 0); // Morning lessons end at 13:00
   } else if (lessonType === 'afternoon') {
     endTime.setHours(18, 0, 0, 0); // Afternoon lessons end at 18:00
+  } else if (lessonType === 'fast') {
+    // For fast mode, determine based on start time
+    const startHour = startTime.getHours();
+    if (startHour < 13) {
+      endTime.setHours(13, 0, 0, 0); // Morning session
+    } else {
+      endTime.setHours(18, 0, 0, 0); // Afternoon session
+    }
   } else {
     // For 'both', return end of afternoon
     endTime.setHours(18, 0, 0, 0);
@@ -202,7 +210,7 @@ const getLessonEndTime = (startTime: Date, lessonType: 'morning' | 'afternoon' |
 };
 
 const getScheduleText = (
-  lessonType: 'morning' | 'afternoon' | 'both', 
+  lessonType: LessonType, 
   participants: ProcessedParticipant[], 
   organizer?: ProcessedParticipant, 
   lessonHours?: number[]
@@ -243,7 +251,7 @@ const getScheduleText = (
   // Fallback to original logic if no dynamic hours
   let startTime: Date | null = null;
   
-  if (lessonType === 'morning' || lessonType === 'both') {
+  if (lessonType === 'morning' || lessonType === 'both' || lessonType === 'fast') {
     const morningStarts = allParticipants
       .filter(p => p.morningFirstJoin)
       .map(p => p.morningFirstJoin!)
@@ -260,7 +268,7 @@ const getScheduleText = (
     }
   }
   
-  if (lessonType === 'afternoon' && !startTime) {
+  if ((lessonType === 'afternoon' || lessonType === 'fast') && !startTime) {
     const afternoonStarts = allParticipants
       .filter(p => p.afternoonFirstJoin)
       .map(p => p.afternoonFirstJoin!)
@@ -295,6 +303,30 @@ const getScheduleText = (
       const afternoonEnd = getActualSessionEndHour(allParticipants, 'afternoon');
       return `${morningStart} - ${morningEnd.toString().padStart(2, '0')}:00 / 14:00 - ${afternoonEnd.toString().padStart(2, '0')}:00`;
     }
+    case 'fast': {
+      // For fast mode, determine schedule based on actual data
+      const hasMorning = allParticipants.some(p => p.morningFirstJoin);
+      const hasAfternoon = allParticipants.some(p => p.afternoonFirstJoin);
+      
+      if (hasMorning && hasAfternoon) {
+        // Both sessions detected
+        const morningStart = startTime ? formatTime(startTime) : '09:00';
+        const morningEnd = getActualSessionEndHour(allParticipants, 'morning');
+        const afternoonEnd = getActualSessionEndHour(allParticipants, 'afternoon');
+        return `${morningStart} - ${morningEnd.toString().padStart(2, '0')}:00 / 14:00 - ${afternoonEnd.toString().padStart(2, '0')}:00`;
+      } else if (hasMorning) {
+        // Only morning session
+        const start = startTime ? formatTime(startTime) : '09:00';
+        const end = getActualSessionEndHour(allParticipants, 'morning');
+        return `${start} - ${end.toString().padStart(2, '0')}:00`;
+      } else if (hasAfternoon) {
+        // Only afternoon session
+        const start = startTime ? formatTime(startTime) : '14:00';
+        const end = getActualSessionEndHour(allParticipants, 'afternoon');
+        return `${start} - ${end.toString().padStart(2, '0')}:00`;
+      }
+      return '';
+    }
     default:
       return '';
   }
@@ -314,14 +346,14 @@ const formatTimeWithSeconds = (date: Date): string => {
 };
 
 // Format all connections for a participant including aliases
-const formatAllConnections = (participant: ProcessedParticipant, lessonType: 'morning' | 'afternoon' | 'both'): string => {
+const formatAllConnections = (participant: ProcessedParticipant, lessonType: LessonType): string => {
   const allConnectionsText: string[] = [];
   
   // Main participant connections
   const mainConnections: string[] = [];
   
   // Morning connections
-  if (lessonType !== 'afternoon' && participant.allConnections.morning.length > 0) {
+  if ((lessonType !== 'afternoon') && participant.allConnections.morning.length > 0) {
     const morningConnections = participant.allConnections.morning
       .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
       .join('; ');
@@ -329,11 +361,34 @@ const formatAllConnections = (participant: ProcessedParticipant, lessonType: 'mo
   }
   
   // Afternoon connections
-  if (lessonType !== 'morning' && participant.allConnections.afternoon.length > 0) {
+  if ((lessonType !== 'morning') && participant.allConnections.afternoon.length > 0) {
     const afternoonConnections = participant.allConnections.afternoon
       .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
       .join('; ');
     mainConnections.push(afternoonConnections);
+  }
+  
+  // For fast mode, include all connections regardless of time
+  if (lessonType === 'fast') {
+    const allConnections: string[] = [];
+    
+    if (participant.allConnections.morning.length > 0) {
+      const morningConnections = participant.allConnections.morning
+        .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
+        .join('; ');
+      allConnections.push(morningConnections);
+    }
+    
+    if (participant.allConnections.afternoon.length > 0) {
+      const afternoonConnections = participant.allConnections.afternoon
+        .map(conn => `${formatTimeWithSeconds(conn.joinTime)}-${formatTimeWithSeconds(conn.leaveTime)}`)
+        .join('; ');
+      allConnections.push(afternoonConnections);
+    }
+    
+    // Override mainConnections for fast mode
+    mainConnections.length = 0;
+    mainConnections.push(...allConnections);
   }
   
   if (mainConnections.length > 0) {
