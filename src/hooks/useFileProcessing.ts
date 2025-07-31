@@ -3,12 +3,10 @@ import { parseZoomCSV, processParticipants } from '../utils/csvParser';
 import { LessonService } from '../services/lessonService';
 import { FileService } from '../services/fileService';
 import { LessonType } from '../types';
-import { useErrorHandler } from './useErrorHandler';
-import { APP_STEPS } from '../constants';
+
 
 export const useFileProcessing = () => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const { handleError } = useErrorHandler();
 
   const processFiles = async (
     lessonType: LessonType,

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { generateWordDocument } from '../utils/wordGenerator';
 import { DateService } from '../services/dateService';
 import { LessonData, ProcessedParticipant, LessonType } from '../types';
-import { APP_STEPS } from '../constants';
+
 
 export const useDocumentGeneration = () => {
   const [isGenerating, setIsGenerating] = useState(false);

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { FiUpload, FiX } from 'react-icons/fi';
+import { FiUpload } from 'react-icons/fi';
 
 interface FileUploadProps {
   label: string;
