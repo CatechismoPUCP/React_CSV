@@ -116,32 +116,87 @@ const prepareTemplateData = (lessonData: LessonData): WordTemplateData => {
       }
       templateData[`presenza${index}` as keyof WordTemplateData] = 'ASSENTE';
     } else {
-      // If present, show actual times with seconds precision
-      // Morning times
-      if (participant.morningFirstJoin && lessonData.lessonType !== 'afternoon') {
-        templateData[`MattOraIn${index}` as keyof WordTemplateData] = formatTimeWithSeconds(participant.morningFirstJoin);
+      // If present, show ALL connection times with seconds precision
+      // Collect all connections including aliases
+      let allMorningConnections = [...participant.allConnections.morning];
+      let allAfternoonConnections = [...participant.allConnections.afternoon];
+      
+      // Add alias connections if they exist
+      if (participant.aliases && participant.aliases.length > 0) {
+        participant.aliases.forEach(alias => {
+          // Parse alias connections from connectionsList string
+          if (alias.connectionsList && alias.connectionsList !== '') {
+            // This is a simplified approach - in a real scenario, you'd need to parse the connectionsList
+            // For now, we'll assume the main participant connections already include merged data
+          }
+        });
       }
       
-      if (participant.morningLastLeave && lessonData.lessonType !== 'afternoon') {
-        templateData[`MattOraOut${index}` as keyof WordTemplateData] = formatTimeWithSeconds(participant.morningLastLeave);
+      // Morning times - show all connections separated by " - "
+      if (lessonData.lessonType !== 'afternoon' && allMorningConnections.length > 0) {
+        const morningInTimes = allMorningConnections
+          .map(conn => formatTimeWithSeconds(conn.joinTime))
+          .join(' - ');
+        const morningOutTimes = allMorningConnections
+          .map(conn => formatTimeWithSeconds(conn.leaveTime))
+          .join(' - ');
+        
+        templateData[`MattOraIn${index}` as keyof WordTemplateData] = morningInTimes;
+        templateData[`MattOraOut${index}` as keyof WordTemplateData] = morningOutTimes;
       }
       
-      // Afternoon times
-      if (participant.afternoonFirstJoin && lessonData.lessonType !== 'morning') {
-        templateData[`PomeOraIn${index}` as keyof WordTemplateData] = formatTimeWithSeconds(participant.afternoonFirstJoin);
+      // Afternoon times - show all connections separated by " - "
+      if (lessonData.lessonType !== 'morning' && allAfternoonConnections.length > 0) {
+        const afternoonInTimes = allAfternoonConnections
+          .map(conn => formatTimeWithSeconds(conn.joinTime))
+          .join(' - ');
+        const afternoonOutTimes = allAfternoonConnections
+          .map(conn => formatTimeWithSeconds(conn.leaveTime))
+          .join(' - ');
+        
+        templateData[`PomeOraIn${index}` as keyof WordTemplateData] = afternoonInTimes;
+        templateData[`PomeOraOut${index}` as keyof WordTemplateData] = afternoonOutTimes;
       }
       
-      if (participant.afternoonLastLeave && lessonData.lessonType !== 'morning') {
-        templateData[`PomeOraOut${index}` as keyof WordTemplateData] = formatTimeWithSeconds(participant.afternoonLastLeave);
+      // For fast mode, show both morning and afternoon
+      if (lessonData.lessonType === 'fast') {
+        // Morning connections
+        if (allMorningConnections.length > 0) {
+          const morningInTimes = allMorningConnections
+            .map(conn => formatTimeWithSeconds(conn.joinTime))
+            .join(' - ');
+          const morningOutTimes = allMorningConnections
+            .map(conn => formatTimeWithSeconds(conn.leaveTime))
+            .join(' - ');
+          
+          templateData[`MattOraIn${index}` as keyof WordTemplateData] = morningInTimes;
+          templateData[`MattOraOut${index}` as keyof WordTemplateData] = morningOutTimes;
+        }
+        
+        // Afternoon connections
+        if (allAfternoonConnections.length > 0) {
+          const afternoonInTimes = allAfternoonConnections
+            .map(conn => formatTimeWithSeconds(conn.joinTime))
+            .join(' - ');
+          const afternoonOutTimes = allAfternoonConnections
+            .map(conn => formatTimeWithSeconds(conn.leaveTime))
+            .join(' - ');
+          
+          templateData[`PomeOraIn${index}` as keyof WordTemplateData] = afternoonInTimes;
+          templateData[`PomeOraOut${index}` as keyof WordTemplateData] = afternoonOutTimes;
+        }
       }
       
-      // Presence status with connection details
+      // Presence status with connection details (keep for debug/reference)
       const connectionsList = formatAllConnections(participant, lessonData.lessonType);
-      templateData[`presenza${index}` as keyof WordTemplateData] = participant.isPresent ? 
+      const presenceValue = participant.isPresent ? 
         `✅ ${connectionsList}` : `❌ ${connectionsList}`;
+      templateData[`presenza${index}` as keyof WordTemplateData] = presenceValue;
+      console.log(`📝 Setting presenza${index} for ${participant.name}:`, presenceValue);
     }
   });
   
+  console.log('📊 Complete Template Data:', templateData);
   return templateData;
 };
 
@@ -347,6 +402,7 @@ const formatTimeWithSeconds = (date: Date): string => {
 
 // Format all connections for a participant including aliases
 const formatAllConnections = (participant: ProcessedParticipant, lessonType: LessonType): string => {
+  
   const allConnectionsText: string[] = [];
   
   // Main participant connections

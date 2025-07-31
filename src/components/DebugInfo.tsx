@@ -31,6 +31,22 @@ export const DebugInfo: React.FC<DebugInfoProps> = ({ lessonData, templateData }
             Mattina: {p.morningFirstJoin ? p.morningFirstJoin.toLocaleTimeString() : '--'} - {p.morningLastLeave ? p.morningLastLeave.toLocaleTimeString() : '--'}
             <br />
             Pomeriggio: {p.afternoonFirstJoin ? p.afternoonFirstJoin.toLocaleTimeString() : '--'} - {p.afternoonLastLeave ? p.afternoonLastLeave.toLocaleTimeString() : '--'}
+            <br />
+            <strong>Tutte le connessioni mattina ({p.allConnections?.morning?.length || 0}):</strong> 
+            {p.allConnections?.morning?.map((conn, idx) => (
+              <span key={idx} style={{fontSize: '0.8em', color: '#666'}}>
+                {conn.joinTime.toLocaleTimeString()}-{conn.leaveTime.toLocaleTimeString()}
+                {idx < (p.allConnections?.morning?.length || 0) - 1 ? '; ' : ''}
+              </span>
+            )) || 'Nessuna'}
+            <br />
+            <strong>Tutte le connessioni pomeriggio ({p.allConnections?.afternoon?.length || 0}):</strong> 
+            {p.allConnections?.afternoon?.map((conn, idx) => (
+              <span key={idx} style={{fontSize: '0.8em', color: '#666'}}>
+                {conn.joinTime.toLocaleTimeString()}-{conn.leaveTime.toLocaleTimeString()}
+                {idx < (p.allConnections?.afternoon?.length || 0) - 1 ? '; ' : ''}
+              </span>
+            )) || 'Nessuna'}
           </li>
         ))}
       </ul>
