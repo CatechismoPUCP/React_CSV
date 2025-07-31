@@ -2,7 +2,6 @@ import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
-import { it } from 'date-fns/locale';
 import { LessonData, WordTemplateData, ProcessedParticipant, LessonType } from '../types';
 
 export const generateWordDocument = async (
