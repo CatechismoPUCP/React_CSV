@@ -348,6 +348,53 @@ body {
   color: #666;
 }
 
+/* Analysis Results */
+.analysis-results {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8f9ff;
+  border-radius: 8px;
+  border: 1px solid #e1e5e9;
+}
+
+.assignment-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: #f0fff4;
+  border-radius: 6px;
+  border: 1px solid #9ae6b4;
+  color: #2f855a;
+  font-size: 0.9rem;
+}
+
+.assignment-info:last-child {
+  margin-bottom: 0;
+}
+
+.assignment-warnings {
+  margin-top: 0.5rem;
+}
+
+.assignment-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: #fffbf0;
+  border-radius: 6px;
+  border: 1px solid #fbd38d;
+  color: #c05621;
+  font-size: 0.9rem;
+}
+
+.assignment-warning:last-child {
+  margin-bottom: 0;
+}
+
 .fast-instructions li {
   margin-bottom: 0.5rem;
   line-height: 1.5;
