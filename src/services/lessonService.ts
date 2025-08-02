@@ -14,51 +14,123 @@ export class LessonService {
     const hours = new Set<number>();
     
     allParticipants.forEach(participant => {
-      // Add hours from morning sessions
+      // Add hours from morning sessions - include all hours with significant activity (excluding 13:00 lunch break)
       if (lessonType !== 'afternoon') {
         participant.allConnections.morning.forEach(connection => {
           const startHour = connection.joinTime.getHours();
           const endHour = connection.leaveTime.getHours();
-          for (let h = Math.max(LESSON_HOURS.MORNING.START, startHour); h <= Math.min(LESSON_HOURS.MORNING.END, endHour); h++) {
-            hours.add(h);
+          
+          // Add all hours where there's significant presence (at least 15 minutes)
+          for (let hour = Math.max(LESSON_HOURS.MORNING.START, startHour); hour <= Math.min(12, endHour); hour++) {
+            // Skip 13:00 as it's lunch break
+            if (hour === 13) continue;
+            
+            // Calculate presence in this hour
+            const hourStart = new Date(connection.joinTime);
+            hourStart.setHours(hour, 0, 0, 0);
+            const hourEnd = new Date(connection.joinTime);
+            hourEnd.setHours(hour, 59, 59, 999);
+            
+            const sessionStart = new Date(Math.max(connection.joinTime.getTime(), hourStart.getTime()));
+            const sessionEnd = new Date(Math.min(connection.leaveTime.getTime(), hourEnd.getTime()));
+            
+            if (sessionEnd > sessionStart) {
+              const presenceMinutes = (sessionEnd.getTime() - sessionStart.getTime()) / (1000 * 60);
+              // Include hour if there's at least 15 minutes of presence
+              if (presenceMinutes >= 15) {
+                hours.add(hour);
+              }
+            }
           }
         });
       }
       
-      // Add hours from afternoon sessions
+      // Add hours from afternoon sessions - include all hours with significant activity
       if (lessonType !== 'morning') {
         participant.allConnections.afternoon.forEach(connection => {
           const startHour = connection.joinTime.getHours();
           const endHour = connection.leaveTime.getHours();
-          for (let h = Math.max(LESSON_HOURS.AFTERNOON.START, startHour); h <= Math.min(LESSON_HOURS.AFTERNOON.END, endHour); h++) {
-            hours.add(h);
+          
+          // Add all hours where there's significant presence (at least 15 minutes)
+          for (let hour = Math.max(LESSON_HOURS.AFTERNOON.START, startHour); hour <= Math.min(LESSON_HOURS.AFTERNOON.END, endHour); hour++) {
+            // Calculate presence in this hour
+            const hourStart = new Date(connection.joinTime);
+            hourStart.setHours(hour, 0, 0, 0);
+            const hourEnd = new Date(connection.joinTime);
+            hourEnd.setHours(hour, 59, 59, 999);
+            
+            const sessionStart = new Date(Math.max(connection.joinTime.getTime(), hourStart.getTime()));
+            const sessionEnd = new Date(Math.min(connection.leaveTime.getTime(), hourEnd.getTime()));
+            
+            if (sessionEnd > sessionStart) {
+              const presenceMinutes = (sessionEnd.getTime() - sessionStart.getTime()) / (1000 * 60);
+              // Include hour if there's at least 15 minutes of presence
+              if (presenceMinutes >= 15) {
+                hours.add(hour);
+              }
+            }
           }
         });
       }
       
-      // For fast mode, add hours from both sessions based on actual data
+      // For fast mode, add hours from both sessions based on significant activity (excluding 13:00)
       if (lessonType === 'fast') {
-        // Morning connections
+        // Morning connections - include all hours with significant activity
         participant.allConnections.morning.forEach(connection => {
           const startHour = connection.joinTime.getHours();
           const endHour = connection.leaveTime.getHours();
-          for (let h = startHour; h <= endHour; h++) {
-            hours.add(h);
+          
+          for (let hour = Math.max(9, startHour); hour <= Math.min(12, endHour); hour++) {
+            if (hour === 13) continue; // Skip lunch break
+            
+            // Calculate presence in this hour
+            const hourStart = new Date(connection.joinTime);
+            hourStart.setHours(hour, 0, 0, 0);
+            const hourEnd = new Date(connection.joinTime);
+            hourEnd.setHours(hour, 59, 59, 999);
+            
+            const sessionStart = new Date(Math.max(connection.joinTime.getTime(), hourStart.getTime()));
+            const sessionEnd = new Date(Math.min(connection.leaveTime.getTime(), hourEnd.getTime()));
+            
+            if (sessionEnd > sessionStart) {
+              const presenceMinutes = (sessionEnd.getTime() - sessionStart.getTime()) / (1000 * 60);
+              if (presenceMinutes >= 15) {
+                hours.add(hour);
+              }
+            }
           }
         });
         
-        // Afternoon connections
+        // Afternoon connections - include all hours with significant activity
         participant.allConnections.afternoon.forEach(connection => {
           const startHour = connection.joinTime.getHours();
           const endHour = connection.leaveTime.getHours();
-          for (let h = startHour; h <= endHour; h++) {
-            hours.add(h);
+          
+          for (let hour = Math.max(14, startHour); hour <= Math.min(18, endHour); hour++) {
+            if (hour === 13) continue; // Skip lunch break
+            
+            // Calculate presence in this hour
+            const hourStart = new Date(connection.joinTime);
+            hourStart.setHours(hour, 0, 0, 0);
+            const hourEnd = new Date(connection.joinTime);
+            hourEnd.setHours(hour, 59, 59, 999);
+            
+            const sessionStart = new Date(Math.max(connection.joinTime.getTime(), hourStart.getTime()));
+            const sessionEnd = new Date(Math.min(connection.leaveTime.getTime(), hourEnd.getTime()));
+            
+            if (sessionEnd > sessionStart) {
+              const presenceMinutes = (sessionEnd.getTime() - sessionStart.getTime()) / (1000 * 60);
+              if (presenceMinutes >= 15) {
+                hours.add(hour);
+              }
+            }
           }
         });
       }
     });
     
-    return Array.from(hours).sort((a, b) => a - b);
+    // Filter out 13:00 as final safety check (lunch break)
+    return Array.from(hours).filter(hour => hour !== 13).sort((a, b) => a - b);
   }
 
   /**

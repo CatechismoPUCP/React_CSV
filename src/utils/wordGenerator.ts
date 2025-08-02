@@ -237,15 +237,21 @@ const getActualSessionEndHour = (participants: ProcessedParticipant[], session: 
   });
   
   if (endTimes.length === 0) {
-    // Fallback to default end times
-    return session === 'morning' ? 13 : 18;
+    // Fallback to default end times (avoid 13:00 for morning)
+    return session === 'morning' ? 12 : 18;
   }
   
   // Find the latest end time and round to nearest hour
   const latestEndTime = new Date(Math.max(...endTimes.map(t => t.getTime())));
   const roundedEndTime = roundToNearestHour(latestEndTime);
+  let endHour = roundedEndTime.getHours();
   
-  return roundedEndTime.getHours();
+  // For morning sessions, if it ends at 13:00, adjust to 12:00 (avoid lunch break)
+  if (session === 'morning' && endHour === 13) {
+    endHour = 12;
+  }
+  
+  return endHour;
 };
 
 
