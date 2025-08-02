@@ -98,9 +98,19 @@ const prepareTemplateData = (lessonData: LessonData): WordTemplateData => {
     
     templateData[`nome${index}` as keyof WordTemplateData] = participant.name || '';
     
-    // Check if participant is explicitly marked as absent or has no sessions
-    const isExplicitlyAbsent = participant.isAbsent || (!participant.isPresent && 
-      participant.sessions.morning.length === 0 && participant.sessions.afternoon.length === 0);
+    // Trust the isPresent flag that was calculated during processing/merging
+    // Only mark as explicitly absent if isAbsent is true OR if isPresent is false
+    const isExplicitlyAbsent = participant.isAbsent || !participant.isPresent;
+    
+    console.log(`🔍 Participant ${participant.name}:`, {
+      isPresent: participant.isPresent,
+      isAbsent: participant.isAbsent,
+      totalAbsenceMinutes: participant.totalAbsenceMinutes,
+      isExplicitlyAbsent,
+      morningConnections: participant.allConnections.morning.length,
+      afternoonConnections: participant.allConnections.afternoon.length,
+      aliases: participant.aliases?.length || 0
+    });
     
     if (isExplicitlyAbsent) {
       // If explicitly absent, all placeholders become "ASSENTE"
