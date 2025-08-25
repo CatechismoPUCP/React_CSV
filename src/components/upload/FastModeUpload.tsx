@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FiZap, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 import { FileUpload } from '../FileUpload';
+import { autoAssignCSVFiles } from '../../utils/csvParser';
 
 interface FastModeUploadProps {
   onFilesAssigned: (morningFile: File, afternoonFile: File) => void;
@@ -9,17 +10,38 @@ interface FastModeUploadProps {
 export const FastModeUpload: React.FC<FastModeUploadProps> = ({ onFilesAssigned }) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [assignmentMessage, setAssignmentMessage] = useState<string>('');
+  const [assignmentWarnings, setAssignmentWarnings] = useState<string[]>([]);
 
   const handleFilesSelected = (files: File[]) => {
     setSelectedFiles(files);
-    
-    // Simple auto-assignment: if we have 2 files, assume first is morning, second is afternoon
+    setAssignmentMessage('');
+    setAssignmentWarnings([]);
+
+    // Analyze and auto-assign by content so order doesn't matter
     if (files.length === 2) {
       setIsProcessing(true);
-      setTimeout(() => {
-        onFilesAssigned(files[0], files[1]);
-        setIsProcessing(false);
-      }, 1000);
+      autoAssignCSVFiles(files)
+        .then(({ morningFile, afternoonFile, errors }) => {
+          const warns = errors || [];
+          setAssignmentWarnings(warns);
+
+          if (morningFile && afternoonFile) {
+            setAssignmentMessage(`Assegnazione completata: ${morningFile.name} → Mattina, ${afternoonFile.name} → Pomeriggio`);
+            onFilesAssigned(morningFile, afternoonFile);
+          } else if (morningFile || afternoonFile) {
+            const which = morningFile ? 'mattina' : 'pomeriggio';
+            const fname = (morningFile || afternoonFile)!.name;
+            setAssignmentMessage(`Rilevato solo ${which}: ${fname}. Carica anche l'altro file.`);
+          } else {
+            setAssignmentMessage('Impossibile determinare mattina/pomeriggio dai file. Controlla i CSV.');
+          }
+          setIsProcessing(false);
+        })
+        .catch(() => {
+          setAssignmentMessage('Errore durante l\'analisi dei file.');
+          setIsProcessing(false);
+        });
     }
   };
 
@@ -62,7 +84,7 @@ export const FastModeUpload: React.FC<FastModeUploadProps> = ({ onFilesAssigned 
         <div className="selected-files">
           <h4>File Selezionati</h4>
           <div className="files-list">
-            {selectedFiles.map((file, index) => (
+            {selectedFiles.map((file: File, index: number) => (
               <div key={index} className="file-item">
                 <FiCheckCircle className="success-icon" />
                 <span className="file-name">{file.name}</span>
@@ -72,16 +94,26 @@ export const FastModeUpload: React.FC<FastModeUploadProps> = ({ onFilesAssigned 
               </div>
             ))}
           </div>
-          {selectedFiles.length === 2 && (
+          {selectedFiles.length === 2 && assignmentMessage && (
             <div className="assignment-info">
               <FiCheckCircle className="success-icon" />
-              <span>File assegnati automaticamente: {selectedFiles[0].name} (Mattina), {selectedFiles[1].name} (Pomeriggio)</span>
+              <span>{assignmentMessage}</span>
             </div>
           )}
           {selectedFiles.length !== 2 && (
             <div className="assignment-warning">
               <FiAlertCircle className="warning-icon" />
               <span>Seleziona esattamente 2 file CSV per l'assegnazione automatica</span>
+            </div>
+          )}
+          {assignmentWarnings.length > 0 && (
+            <div className="assignment-warning">
+              <FiAlertCircle className="warning-icon" />
+              <div>
+                {assignmentWarnings.map((w, i) => (
+                  <div key={i}>{w}</div>
+                ))}
+              </div>
             </div>
           )}
         </div>
