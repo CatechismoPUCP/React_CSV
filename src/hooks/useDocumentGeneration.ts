@@ -28,9 +28,11 @@ export const useDocumentGeneration = () => {
     setIsGenerating(true);
 
     try {
-      // Extract date from filename
+      // Prefer date from CSV participants; fallback to filename; then to today
+      const participantDate = DateService.extractDateFromParticipants(participants, organizer);
       const dateFile = morningFile || afternoonFile;
-      const lessonDate = DateService.extractDateFromFilename(dateFile);
+      const filenameDate = DateService.extractDateFromFilename(dateFile);
+      const lessonDate = participantDate || filenameDate || new Date();
 
       const lessonData: LessonData = {
         date: lessonDate,

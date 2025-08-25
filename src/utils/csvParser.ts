@@ -49,30 +49,46 @@ const cleanParticipantName = (name: string): string => {
 };
 
 const parseZoomDateTime = (dateTimeStr: string): Date => {
-  // Format: "08/07/2025 09:02:37 AM"
+  // Expected formats like: "08/07/2025 09:02:37 AM" (Italian export)
+  // Handle both DD/MM/YYYY and MM/DD/YYYY gracefully, defaulting to DD/MM/YYYY
   if (!dateTimeStr) return new Date();
-  
+
   try {
-    // Convert to a format that Date can parse
-    const [datePart, timePart, ampm] = dateTimeStr.split(' ');
-    const [month, day, year] = datePart.split('/');
-    const [hours, minutes, seconds] = timePart.split(':');
-    
-    let hour24 = parseInt(hours);
-    if (ampm === 'PM' && hour24 !== 12) {
-      hour24 += 12;
-    } else if (ampm === 'AM' && hour24 === 12) {
-      hour24 = 0;
+    const cleaned = dateTimeStr.replace(/"/g, '').trim();
+    const parts = cleaned.split(/\s+/);
+    const datePart = parts[0];
+    const timePart = parts[1] || '00:00:00';
+    const ampm = (parts[2] || '').toUpperCase();
+
+    const [p1, p2, p3] = datePart.split('/').map((v) => parseInt(v, 10));
+    let day = p1;
+    let month = p2;
+    const year = p3;
+
+    // Auto-detect format:
+    // - If first token > 12 -> it must be DD/MM/YYYY (Italian)
+    // - If second token > 12 -> it's MM/DD/YYYY and needs swap
+    // - If both <= 12 -> default to DD/MM/YYYY (Italian context)
+    if (day > 12 && month <= 12) {
+      // Already DD/MM
+    } else if (month > 12 && day <= 12) {
+      // Was MM/DD -> swap to DD/MM
+      const tmp = day; day = month; month = tmp;
+    } else {
+      // Ambiguous (both <= 12). Prefer DD/MM for Italian CSVs
+      // No change needed
     }
-    
-    return new Date(
-      parseInt(year),
-      parseInt(month) - 1, // Month is 0-indexed
-      parseInt(day),
-      hour24,
-      parseInt(minutes),
-      parseInt(seconds)
-    );
+
+    const [hhStr = '0', mmStr = '0', ssStr = '0'] = timePart.split(':');
+    let hour24 = parseInt(hhStr, 10);
+    const minute = parseInt(mmStr, 10) || 0;
+    const second = parseInt(ssStr, 10) || 0;
+
+    if (ampm === 'PM' && hour24 !== 12) hour24 += 12;
+    else if (ampm === 'AM' && hour24 === 12) hour24 = 0;
+
+    // Construct local date (no timezone conversion)
+    return new Date(year, (month || 1) - 1, day || 1, hour24 || 0, minute, second);
   } catch (error) {
     console.error('Errore parsing data:', dateTimeStr, error);
     return new Date();
