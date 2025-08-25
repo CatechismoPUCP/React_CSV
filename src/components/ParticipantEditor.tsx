@@ -9,6 +9,7 @@ interface ParticipantEditorProps {
   participants: ProcessedParticipant[];
   organizer?: ProcessedParticipant;
   onParticipantsChange: (participants: ProcessedParticipant[]) => void;
+  onSetOrganizer: (index: number) => void;
   lessonType: LessonType;
   lessonDate: Date;
 }
@@ -17,6 +18,7 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
   participants,
   organizer,
   onParticipantsChange,
+  onSetOrganizer,
   lessonType,
   lessonDate = new Date()
 }) => {
@@ -73,6 +75,16 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
         <ParticipantStats participants={participants} organizer={organizer} />
       </div>
 
+      {organizer && (
+        <div className="organizer-section">
+          <h4>Organizzatore</h4>
+          <div className="organizer-card">
+            <span className="participant-name">{organizer.name}</span>
+            <span className="organizer-badge">Organizzatore</span>
+          </div>
+        </div>
+      )}
+
       <div className="editor-controls">
         <MergeControls
           mergeMode={mergeMode}
@@ -109,6 +121,7 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
             onMergeWith={handleMergeSelection}
             mergeMode={mergeMode}
             selectedForMerge={selectedForMerge}
+            onSetOrganizer={onSetOrganizer}
           />
         ))}
       </div>

@@ -10,6 +10,7 @@ interface EditSectionProps {
   participants: ProcessedParticipant[];
   organizer: ProcessedParticipant | null;
   onParticipantsChange: (participants: ProcessedParticipant[]) => void;
+  setOrganizer: (organizer: ProcessedParticipant | null) => void;
   lessonType: LessonType;
   lessonHours: number[];
   morningFile: File | null;
@@ -27,6 +28,7 @@ export const EditSection: React.FC<EditSectionProps> = ({
   participants,
   organizer,
   onParticipantsChange,
+  setOrganizer,
   lessonType,
   lessonHours,
   morningFile,
@@ -51,12 +53,31 @@ export const EditSection: React.FC<EditSectionProps> = ({
     lessonHours: lessonHours
   };
 
+  // Quickly set a participant as organizer, and return any previous organizer to the list
+  const handleSetOrganizer = (participantIndex: number) => {
+    if (participantIndex < 0 || participantIndex >= participants.length) return;
+
+    const selected = participants[participantIndex];
+    const rest = participants.filter((_, i) => i !== participantIndex);
+
+    const newOrganizer: ProcessedParticipant = { ...selected, isOrganizer: true };
+
+    // If there was a previous organizer, move them back into the list (without organizer flag)
+    const updatedList = organizer
+      ? [...rest, { ...organizer, isOrganizer: false }]
+      : rest;
+
+    onParticipantsChange(updatedList);
+    setOrganizer(newOrganizer);
+  };
+
   return (
     <div className="edit-section">
       <ParticipantEditor
         participants={participants}
         organizer={organizer || undefined}
         onParticipantsChange={onParticipantsChange}
+        onSetOrganizer={handleSetOrganizer}
         lessonType={lessonType}
         lessonDate={lessonDate}
       />

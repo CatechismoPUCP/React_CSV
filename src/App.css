@@ -901,6 +901,30 @@ body {
   margin-bottom: 2rem;
 }
 
+/* Organizer section (separate, on top) */
+.organizer-section {
+  margin-bottom: 1.5rem;
+}
+
+.organizer-section h4 {
+  margin: 0 0 0.75rem 0;
+  color: #333;
+}
+
+.organizer-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 2px solid #b794f4;
+  border-radius: 10px;
+  background: #faf5ff;
+}
+
+.organizer-card .participant-name {
+  font-size: 1.1rem;
+}
+
 .participant-item {
   background: white;
   border: 2px solid #e1e5e9;
@@ -1011,6 +1035,32 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* Bigger, clear button to set organizer */
+.organizer-set-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: 2px solid #805ad5;
+  border-radius: 8px;
+  background: #6b46c1;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.organizer-set-btn:hover {
+  background: #553c9a;
+  border-color: #6b46c1;
+  transform: translateY(-1px);
+}
+
+.organizer-set-btn svg {
+  font-size: 1.1rem;
 }
 
 .presence-toggle {

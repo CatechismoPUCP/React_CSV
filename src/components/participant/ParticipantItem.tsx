@@ -1,6 +1,6 @@
 import React from 'react';
 import { ProcessedParticipant, LessonType } from '../../types';
-import { FiClock, FiCheckCircle, FiXCircle, FiTrash2, FiArrowUp, FiArrowDown } from 'react-icons/fi';
+import { FiClock, FiCheckCircle, FiXCircle, FiTrash2, FiArrowUp, FiArrowDown, FiUserCheck } from 'react-icons/fi';
 import { MdDragIndicator } from 'react-icons/md';
 
 interface ParticipantItemProps {
@@ -15,6 +15,7 @@ interface ParticipantItemProps {
   onMergeWith: (index: number) => void;
   mergeMode: boolean;
   selectedForMerge: number | null;
+  onSetOrganizer: (index: number) => void;
 }
 
 export const ParticipantItem: React.FC<ParticipantItemProps> = ({
@@ -29,6 +30,7 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
   onMergeWith,
   mergeMode,
   selectedForMerge,
+  onSetOrganizer,
 }) => {
   const formatTime = (date?: Date) => {
     if (!date) return '--:--';
@@ -92,6 +94,19 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
         </div>
         
         <div className="participant-actions">
+          {!participant.isOrganizer && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSetOrganizer(index);
+              }}
+              className="organizer-set-btn"
+              title="Imposta come Organizzatore"
+            >
+              <FiUserCheck />
+              <span>Imposta organizzatore</span>
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();

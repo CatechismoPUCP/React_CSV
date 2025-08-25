@@ -102,6 +102,7 @@ function App() {
             participants={appState.participants}
             organizer={appState.organizer}
             onParticipantsChange={appState.setParticipants}
+            setOrganizer={appState.setOrganizer}
             lessonType={appState.lessonType}
             lessonHours={appState.lessonHours}
             morningFile={appState.morningFile}
