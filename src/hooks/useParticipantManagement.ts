@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ProcessedParticipant } from '../types';
+import { ParticipantService } from '../services/participantService';
 
 export const useParticipantManagement = (
   initialParticipants: ProcessedParticipant[],
@@ -50,43 +51,42 @@ export const useParticipantManagement = (
   }, []);
 
   const mergeParticipants = useCallback((targetIndex: number, sourceIndex: number) => {
-    const updatedParticipants = [...initialParticipants];
-    const target = updatedParticipants[targetIndex];
-    const source = updatedParticipants[sourceIndex];
+    if (targetIndex === sourceIndex) return;
 
-    // Merge the source into the target
-    const mergedParticipant: ProcessedParticipant = {
-      ...target,
-      aliases: [
-        ...(target.aliases || []),
-        {
-          name: source.name,
-          connectionsList: [...source.allConnections.morning, ...source.allConnections.afternoon]
-            .map(conn => `${conn.joinTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}-${conn.leaveTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`)
-            .join('; ')
-        },
-        ...(source.aliases || [])
-      ]
-    };
+    const updated = [...initialParticipants];
+    const target = updated[targetIndex];
+    const source = updated[sourceIndex];
+
+    // Merge using centralized, order-independent logic
+    const mergedParticipant: ProcessedParticipant = ParticipantService.mergeParticipants(target, source);
 
     // Update the target and remove the source
-    updatedParticipants[targetIndex] = mergedParticipant;
-    updatedParticipants.splice(sourceIndex, 1);
+    updated[targetIndex] = mergedParticipant;
+    updated.splice(sourceIndex, 1);
 
-    onParticipantsChange(updatedParticipants);
-    setMergeMode(false);
-    setSelectedForMerge(null);
+    onParticipantsChange(updated);
+
+    // Keep merge mode active for multi-merge; maintain selection on the (possibly shifted) target index
+    setMergeMode(true);
+    setSelectedForMerge(prev => {
+      if (prev === null) return null;
+      let newTargetIndex = targetIndex;
+      if (sourceIndex < targetIndex) newTargetIndex = targetIndex - 1;
+      return newTargetIndex;
+    });
   }, [initialParticipants, onParticipantsChange]);
 
   const handleMergeSelection = useCallback((clickedIndex: number) => {
+    if (!mergeMode) return;
+
     if (selectedForMerge === null) {
-      // First click: select the target participant
+      // First click: select the anchor participant (no hierarchy in result)
       setSelectedForMerge(clickedIndex);
     } else {
-      // Second click: merge the clicked participant into the selected one
+      // Second and subsequent clicks: merge the clicked participant into the selected anchor
       mergeParticipants(selectedForMerge, clickedIndex);
     }
-  }, [selectedForMerge, mergeParticipants]);
+  }, [mergeMode, selectedForMerge, mergeParticipants]);
 
   return {
     mergeMode,
