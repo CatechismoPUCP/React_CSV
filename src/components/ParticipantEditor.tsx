@@ -60,14 +60,6 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
     setNewParticipantName('');
   };
 
-  const formatTimeWithSeconds = (date: Date): string => {
-    return date.toLocaleTimeString('it-IT', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  };
-
   return (
     <div className="participant-editor">
       <div className="editor-header">

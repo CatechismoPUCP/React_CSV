@@ -2,7 +2,6 @@ import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
-import { it } from 'date-fns/locale';
 import { LessonData, WordTemplateData, ProcessedParticipant, LessonType } from '../types';
 
 export const generateWordDocument = async (
@@ -37,7 +36,6 @@ export const generateWordDocument = async (
     doc.render(templateData);
     
     // Check for errors
-    const errors = doc.getFullText();
     
     // Generate output
     const output = doc.getZip().generate({
@@ -240,30 +238,6 @@ const getActualSessionEndHour = (participants: ProcessedParticipant[], session: 
   return roundedEndTime.getHours();
 };
 
-// Get lesson end time based on start time and lesson type
-const getLessonEndTime = (startTime: Date, lessonType: LessonType): Date => {
-  const endTime = new Date(startTime);
-  
-  if (lessonType === 'morning') {
-    endTime.setHours(13, 0, 0, 0); // Morning lessons end at 13:00
-  } else if (lessonType === 'afternoon') {
-    endTime.setHours(18, 0, 0, 0); // Afternoon lessons end at 18:00
-  } else if (lessonType === 'fast') {
-    // For fast mode, determine based on start time
-    const startHour = startTime.getHours();
-    if (startHour < 13) {
-      endTime.setHours(13, 0, 0, 0); // Morning session
-    } else {
-      endTime.setHours(18, 0, 0, 0); // Afternoon session
-    }
-  } else {
-    // For 'both', return end of afternoon
-    endTime.setHours(18, 0, 0, 0);
-  }
-  
-  return endTime;
-};
-
 const getScheduleText = (
   lessonType: LessonType, 
   participants: ProcessedParticipant[], 
@@ -276,8 +250,6 @@ const getScheduleText = (
   // Use dynamic lesson hours if available
   if (lessonHours && lessonHours.length > 0) {
     const sortedHours = [...lessonHours].sort((a, b) => a - b);
-    const startHour = sortedHours[0];
-    const endHour = sortedHours[sortedHours.length - 1];
     
     // Determine if it's morning, afternoon, or both based on hours
     const morningHours = sortedHours.filter(h => h >= 9 && h <= 13);

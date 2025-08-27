@@ -97,10 +97,6 @@ export const ConnectionsLog: React.FC<ConnectionsLogProps> = ({
     });
   };
 
-  const getSessionLabel = (session: 'morning' | 'afternoon') => {
-    return session === 'morning' ? 'Mattina' : 'Pomeriggio';
-  };
-
   const getEventIcon = (type: 'join' | 'leave') => {
     return type === 'join' ? <FiLogIn className="join-icon" /> : <FiLogOut className="leave-icon" />;
   };

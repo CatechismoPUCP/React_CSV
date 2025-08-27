@@ -40,7 +40,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   onProcessFiles,
   isProcessing,
 }) => {
-  const { uploadMode, toggleMode, isManualMode, isFastMode } = useUploadMode();
+  const { toggleMode, isManualMode, isFastMode } = useUploadMode();
 
   const handleFastModeAssignment = (morning: File, afternoon: File) => {
     setMorningFile(morning);
