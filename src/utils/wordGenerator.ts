@@ -4,6 +4,21 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { LessonData, WordTemplateData, ProcessedParticipant, LessonType } from '../types';
 
+/**
+ * Word Document Generator Utility
+ * 
+ * This module handles the generation of Word documents from lesson data using templates.
+ * It processes participant attendance data and fills Word template placeholders with
+ * formatted information including schedules, participant names, and connection times.
+ */
+
+/**
+ * Generates a Word document from lesson data using a template file
+ * 
+ * @param lessonData - Complete lesson information including participants and schedule
+ * @param templateFile - Word template file (.docx) with placeholders
+ * @throws Error if template processing fails or placeholders are missing
+ */
 export const generateWordDocument = async (
   lessonData: LessonData,
   templateFile: File
@@ -13,7 +28,7 @@ export const generateWordDocument = async (
     const templateBuffer = await templateFile.arrayBuffer();
     const zip = new PizZip(templateBuffer);
     
-    // Create docxtemplater instance
+    // Configure docxtemplater with Italian-friendly settings
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
@@ -22,35 +37,29 @@ export const generateWordDocument = async (
         end: '}}'
       },
       nullGetter: function() {
-        return '';
+        return ''; // Return empty string for missing placeholders
       },
       errorLogging: false
     });
     
-    // Prepare template data
+    // Transform lesson data into template-compatible format
     const templateData = prepareTemplateData(lessonData);
     
-    console.log('Template data:', templateData);
+    console.log('📊 Template data prepared:', templateData);
     
-    // Render document
+    // Fill template placeholders with processed data
     doc.render(templateData);
     
-    // Check for errors
-    
-    // Generate output
+    // Generate the final document blob
     const output = doc.getZip().generate({
       type: 'blob',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
     
-    // Generate filename with course ID (if provided)
-    const dateStr = format(lessonData.date, 'yyyy_MM_dd');
-    let filename = `modello B fad_${dateStr}.docx`;
-    if (lessonData.courseId) {
-      filename = `modello B fad_${lessonData.courseId}_${dateStr}.docx`;
-    }
+    // Create filename with date and optional course ID
+    const filename = generateFilename(lessonData);
     
-    // Save file
+    // Trigger download
     saveAs(output, filename);
   } catch (error: any) {
     console.error('Errore durante la generazione del documento Word:', error);
@@ -68,6 +77,15 @@ export const generateWordDocument = async (
   }
 };
 
+/**
+ * Transforms lesson data into Word template-compatible format
+ * 
+ * Processes participant attendance data and formats it for Word template placeholders.
+ * Handles up to 5 participants with morning/afternoon connection times and presence status.
+ * 
+ * @param lessonData - Complete lesson information including participants and schedule
+ * @returns Formatted data object matching Word template placeholders
+ */
 const prepareTemplateData = (lessonData: LessonData): WordTemplateData => {
   const date = lessonData.date;
   
@@ -198,7 +216,12 @@ const prepareTemplateData = (lessonData: LessonData): WordTemplateData => {
   return templateData;
 };
 
-// Round time to nearest hour for better readability
+/**
+ * Rounds a time to the nearest hour for cleaner schedule display
+ * 
+ * @param date - Date object to round
+ * @returns New Date object rounded to nearest hour
+ */
 const roundToNearestHour = (date: Date): Date => {
   const rounded = new Date(date);
   const minutes = rounded.getMinutes();
@@ -214,7 +237,13 @@ const roundToNearestHour = (date: Date): Date => {
   return rounded;
 };
 
-// Get actual session end hour based on participant data
+/**
+ * Calculates the actual end hour for a session based on participant data
+ * 
+ * @param participants - Array of processed participants
+ * @param session - Session type (morning or afternoon)
+ * @returns Hour (0-23) when the session actually ended
+ */
 const getActualSessionEndHour = (participants: ProcessedParticipant[], session: 'morning' | 'afternoon'): number => {
   const endTimes: Date[] = [];
   
@@ -238,6 +267,15 @@ const getActualSessionEndHour = (participants: ProcessedParticipant[], session: 
   return roundedEndTime.getHours();
 };
 
+/**
+ * Generates schedule text for the Word template based on lesson type and participant data
+ * 
+ * @param lessonType - Type of lesson (morning, afternoon, both, fast)
+ * @param participants - Array of processed participants
+ * @param organizer - Optional organizer participant
+ * @param lessonHours - Optional array of lesson hours
+ * @returns Formatted schedule string (e.g., "09:00 - 13:00 / 14:00 - 18:00")
+ */
 const getScheduleText = (
   lessonType: LessonType, 
   participants: ProcessedParticipant[], 
@@ -359,6 +397,13 @@ const getScheduleText = (
   }
 };
 
+/**
+ * Formats a Date object to HH:MM string format
+ * 
+ * @param date - Date object to format
+ * @param roundToHour - Whether to round to nearest hour
+ * @returns Formatted time string
+ */
 const formatTime = (date: Date, roundToHour: boolean = false): string => {
   if (roundToHour) {
     const rounded = roundToNearestHour(date);
@@ -367,12 +412,23 @@ const formatTime = (date: Date, roundToHour: boolean = false): string => {
   return format(date, 'HH:mm');
 };
 
-// Format time with seconds for detailed logging
+/**
+ * Formats time with seconds precision for detailed logging
+ * 
+ * @param date - Date object to format
+ * @returns Time string in HH:MM:SS format
+ */
 const formatTimeWithSeconds = (date: Date): string => {
   return format(date, 'HH:mm:ss');
 };
 
-// Format all connections for a participant including aliases
+/**
+ * Formats all connection times for a participant including aliases
+ * 
+ * @param participant - Processed participant data
+ * @param lessonType - Type of lesson to determine which sessions to include
+ * @returns Formatted connection string with all join/leave times
+ */
 const formatAllConnections = (participant: ProcessedParticipant, lessonType: LessonType): string => {
   
   const allConnectionsText: string[] = [];
@@ -433,4 +489,17 @@ const formatAllConnections = (participant: ProcessedParticipant, lessonType: Les
   }
   
   return allConnectionsText.length > 0 ? allConnectionsText.join(' || ') : 'Nessuna connessione';
+};
+
+/**
+ * Generates a standardized filename for the Word document
+ * 
+ * @param lessonData - Lesson data containing date and optional course ID
+ * @returns Formatted filename string
+ */
+const generateFilename = (lessonData: LessonData): string => {
+  const dateStr = format(lessonData.date, 'yyyy_MM_dd');
+  return lessonData.courseId 
+    ? `modello B fad_${lessonData.courseId}_${dateStr}.docx`
+    : `modello B fad_${dateStr}.docx`;
 };
