@@ -115,55 +115,59 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
   return (
     <div className="upload-section">
-      {/* Upload Mode Selection */}
-      <UploadModeToggle 
-        isManualMode={isManualMode}
-        onToggleMode={toggleMode}
-      />
+      <div className="upload-section-left">
+        {/* Upload Mode Selection */}
+        <UploadModeToggle 
+          isManualMode={isManualMode}
+          onToggleMode={toggleMode}
+        />
 
-      {/* Lesson Type Configuration */}
-      <LessonTypeSelector 
-        lessonType={lessonType}
-        onLessonTypeChange={setLessonType}
-      />
+        {/* Lesson Type Configuration */}
+        <LessonTypeSelector 
+          lessonType={lessonType}
+          onLessonTypeChange={setLessonType}
+        />
 
-      {/* Course Information Form */}
-      <CourseInfoSection 
-        courseId={courseId}
-        onCourseIdChange={setCourseId}
-        subject={subject}
-        onSubjectChange={setSubject}
-      />
+        {/* Course Information Form */}
+        <CourseInfoSection 
+          courseId={courseId}
+          onCourseIdChange={setCourseId}
+          subject={subject}
+          onSubjectChange={setSubject}
+        />
+      </div>
 
-      {/* CSV File Upload Section */}
-      <CSVUploadSection 
-        isFastMode={isFastMode}
-        lessonType={lessonType}
-        morningFile={morningFile}
-        afternoonFile={afternoonFile}
-        onMorningFileSelect={setMorningFile}
-        onAfternoonFileSelect={setAfternoonFile}
-        onFastModeAssignment={handleFastModeAssignment}
-      />
+      <div className="upload-section-right">
+        {/* CSV File Upload Section */}
+        <CSVUploadSection 
+          isFastMode={isFastMode}
+          lessonType={lessonType}
+          morningFile={morningFile}
+          afternoonFile={afternoonFile}
+          onMorningFileSelect={setMorningFile}
+          onAfternoonFileSelect={setAfternoonFile}
+          onFastModeAssignment={handleFastModeAssignment}
+        />
 
-      {/* Word Template Upload */}
-      <TemplateUploadSection 
-        templateFile={templateFile}
-        onTemplateFileSelect={setTemplateFile}
-        onShowTemplateGuide={onShowTemplateGuide}
-      />
+        {/* Word Template Upload */}
+        <TemplateUploadSection 
+          templateFile={templateFile}
+          onTemplateFileSelect={setTemplateFile}
+          onShowTemplateGuide={onShowTemplateGuide}
+        />
 
-      {/* Processing Controls */}
-      <ProcessingControls 
-        canProcess={canProcess()}
-        isProcessing={isProcessing}
-        onProcessFiles={onProcessFiles}
-        lessonType={lessonType}
-        morningFile={morningFile}
-        afternoonFile={afternoonFile}
-        templateFile={templateFile}
-        subject={subject}
-      />
+        {/* Processing Controls */}
+        <ProcessingControls 
+          canProcess={canProcess()}
+          isProcessing={isProcessing}
+          onProcessFiles={onProcessFiles}
+          lessonType={lessonType}
+          morningFile={morningFile}
+          afternoonFile={afternoonFile}
+          templateFile={templateFile}
+          subject={subject}
+        />
+      </div>
     </div>
   );
 };
@@ -190,14 +194,30 @@ const UploadModeToggle: React.FC<UploadModeToggleProps> = ({ isManualMode, onTog
         {isManualMode ? (
           <>
             <FiFileText />
-            <span>Modalità Manuale</span>
-            <small>Carica file singolarmente</small>
+            <span>Modalità Normale</span>
+            <div className="mode-explanation">
+              Controllo completo sui file caricati
+              <ul className="mode-features">
+                <li>Selezione manuale dei file</li>
+                <li>Controllo individuale di ogni upload</li>
+                <li>Maggiore precisione</li>
+                <li>Ideale per utenti esperti</li>
+              </ul>
+            </div>
           </>
         ) : (
           <>
             <FiZap />
             <span>Modalità Veloce</span>
-            <small>Carica e assegna automaticamente</small>
+            <div className="mode-explanation">
+              Caricamento automatico e intelligente
+              <ul className="mode-features">
+                <li>Riconoscimento automatico dei file</li>
+                <li>Assegnazione intelligente mattina/pomeriggio</li>
+                <li>Processo semplificato</li>
+                <li>Perfetto per principianti</li>
+              </ul>
+            </div>
           </>
         )}
       </button>
