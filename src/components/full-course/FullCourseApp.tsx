@@ -13,7 +13,6 @@ type CourseAppStep = 'course-list' | 'course-setup' | 'course-dashboard';
 
 export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) => {
   const [currentStep, setCurrentStep] = useState<CourseAppStep>('course-list');
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   
   const { 
     courses, 
@@ -30,7 +29,6 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) =>
   }, [loadCourses]);
 
   const handleCourseSelect = async (courseId: string) => {
-    setSelectedCourseId(courseId);
     await setCurrentCourse(courseId);
     setCurrentStep('course-dashboard');
   };
@@ -40,13 +38,11 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) =>
   };
 
   const handleCourseSetupComplete = (courseData: CourseData) => {
-    setSelectedCourseId(courseData.courseId);
     setCurrentStep('course-dashboard');
   };
 
   const handleBackToCourseList = () => {
     setCurrentStep('course-list');
-    setSelectedCourseId(null);
     setCurrentCourse(null);
   };
 
