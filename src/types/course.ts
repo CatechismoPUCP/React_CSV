@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProcessedParticipant, LessonData, LessonType } from '../types';
+import { ProcessedParticipant, LessonData } from '../types';
 
 /**
  * Person information for instructor and coordinator

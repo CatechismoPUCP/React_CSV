@@ -3,7 +3,7 @@ import Calendar from 'react-calendar';
 import { format, parseISO, eachDayOfInterval, isWeekend } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { LessonSchedule, SessionInfo } from '../../../types/course';
-import { FiClock, FiTrash2, FiEdit2, FiPlus } from 'react-icons/fi';
+import { FiTrash2, FiPlus } from 'react-icons/fi';
 import 'react-calendar/dist/Calendar.css';
 
 interface ScheduleCalendarProps {
