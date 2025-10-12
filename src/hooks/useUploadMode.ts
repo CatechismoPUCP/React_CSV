@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 export type UploadMode = 'manual' | 'fast';
 
 export const useUploadMode = () => {
-  const [uploadMode, setUploadMode] = useState<UploadMode>('manual');
+  const [uploadMode, setUploadMode] = useState<UploadMode>('fast');
 
   const toggleMode = useCallback(() => {
     setUploadMode(prev => prev === 'manual' ? 'fast' : 'manual');

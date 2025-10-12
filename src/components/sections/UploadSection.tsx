@@ -186,40 +186,40 @@ const UploadModeToggle: React.FC<UploadModeToggleProps> = ({ isManualMode, onTog
       <FiZap className="section-icon" />
       <h3>Modalità Caricamento</h3>
     </div>
-    <div className="upload-mode-toggle">
+    <div className="upload-mode-toggle split">
       <button
-        onClick={onToggleMode}
-        className={`mode-toggle ${isManualMode ? 'manual' : 'fast'}`}
+        onClick={() => { if (!isManualMode) onToggleMode(); }}
+        className={`mode-toggle manual${isManualMode ? ' selected' : ''}`}
+        aria-pressed={isManualMode}
       >
-        {isManualMode ? (
-          <>
-            <FiFileText />
-            <span>Modalità Normale</span>
-            <div className="mode-explanation">
-              Controllo completo sui file caricati
-              <ul className="mode-features">
-                <li>Selezione manuale dei file</li>
-                <li>Controllo individuale di ogni upload</li>
-                <li>Maggiore precisione</li>
-                <li>Ideale per utenti esperti</li>
-              </ul>
-            </div>
-          </>
-        ) : (
-          <>
-            <FiZap />
-            <span>Modalità Veloce</span>
-            <div className="mode-explanation">
-              Caricamento automatico e intelligente
-              <ul className="mode-features">
-                <li>Riconoscimento automatico dei file</li>
-                <li>Assegnazione intelligente mattina/pomeriggio</li>
-                <li>Processo semplificato</li>
-                <li>Perfetto per principianti</li>
-              </ul>
-            </div>
-          </>
-        )}
+        <FiFileText />
+        <span>Modalità Classica</span>
+        <div className="mode-explanation">
+          <strong>Controllo Manuale Completo</strong>
+          <ul className="mode-features">
+            <li>Selezione individuale dei file</li>
+            <li>Controllo preciso di ogni upload</li>
+            <li>Maggiore flessibilità</li>
+            <li>Per utenti esperti</li>
+          </ul>
+        </div>
+      </button>
+      <button
+        onClick={() => { if (isManualMode) onToggleMode(); }}
+        className={`mode-toggle fast${!isManualMode ? ' selected' : ''}`}
+        aria-pressed={!isManualMode}
+      >
+        <FiZap />
+        <span>🚀 Modalità Veloce</span>
+        <div className="mode-explanation">
+          <strong>Caricamento Automatico e Intelligente</strong>
+          <ul className="mode-features">
+            <li>Riconoscimento automatico dei file</li>
+            <li>Assegnazione intelligente mattina/pomeriggio</li>
+            <li>Processo semplificato in un click</li>
+            <li>Perfetto per principianti</li>
+          </ul>
+        </div>
       </button>
     </div>
   </div>
