@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ProcessedParticipant, LessonType } from '../types';
 import { FiPlus, FiEye, FiEyeOff } from 'react-icons/fi';
 import { ConnectionsLog } from './ConnectionsLog';
@@ -30,12 +32,32 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
     selectedForMerge,
     togglePresence,
     removeParticipant,
-    moveUp,
-    moveDown,
     toggleMergeMode,
     cancelMerge,
     handleMergeSelection,
   } = useParticipantManagement(participants, onParticipantsChange);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    // Extract indices from IDs
+    const activeIndex = parseInt(active.id.toString().replace('participant-', ''));
+    const overIndex = parseInt(over.id.toString().replace('participant-', ''));
+
+    const reorderedParticipants = arrayMove(participants, activeIndex, overIndex);
+    onParticipantsChange(reorderedParticipants);
+  };
 
   const addManualParticipant = () => {
     if (!newParticipantName.trim()) return;
@@ -98,25 +120,49 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
         </div>
       </div>
 
-      <div className="participants-list">
-        {participants.map((participant, index) => (
-          <ParticipantItem
-            key={`${participant.name}-${index}`}
-            participant={participant}
-            index={index}
-            totalCount={participants.length}
-            lessonType={lessonType}
-            onTogglePresence={togglePresence}
-            onRemove={removeParticipant}
-            onMoveUp={moveUp}
-            onMoveDown={moveDown}
-            onMergeWith={handleMergeSelection}
-            mergeMode={mergeMode}
-            selectedForMerge={selectedForMerge}
-            onSetOrganizer={onSetOrganizer}
-          />
-        ))}
-      </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={participants.map((_, index) => `participant-${index}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="participants-list">
+            {participants.map((participant, index) => (
+              <ParticipantItem
+                key={`${participant.name}-${index}`}
+                participant={participant}
+                index={index}
+                totalCount={participants.length}
+                lessonType={lessonType}
+                onTogglePresence={togglePresence}
+                onRemove={removeParticipant}
+                onMergeWith={handleMergeSelection}
+                mergeMode={mergeMode}
+                selectedForMerge={selectedForMerge}
+                onSetOrganizer={onSetOrganizer}
+                isDragEnabled={!mergeMode}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+
+      {participants.length > 0 && (
+        <div className="drag-and-drop-hint" style={{
+          padding: '12px',
+          background: '#e3f2fd',
+          borderRadius: '6px',
+          marginTop: '12px',
+          textAlign: 'center',
+          color: '#1565c0',
+          fontSize: '0.9rem'
+        }}>
+          💡 <strong>Trascina i partecipanti</strong> usando l'icona <FiPlus style={{transform: 'rotate(45deg)', display: 'inline-block'}} /> per riordinarli velocemente
+        </div>
+      )}
 
       <div className="add-participant">
         <div className="add-participant-form">
