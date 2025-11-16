@@ -660,8 +660,8 @@ export class AliasManagementService {
     if (tokens1.size === 0 || tokens2.size === 0) return 0.0;
 
     // Calculate Jaccard similarity: |intersection| / |union|
-    const intersection = new Set([...tokens1].filter(t => tokens2.has(t)));
-    const union = new Set([...tokens1, ...tokens2]);
+    const intersection = new Set(Array.from(tokens1).filter(t => tokens2.has(t)));
+    const union = new Set([...Array.from(tokens1), ...Array.from(tokens2)]);
 
     return intersection.size / union.size;
   }

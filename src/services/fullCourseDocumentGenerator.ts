@@ -314,7 +314,7 @@ export class FullCourseDocumentGenerator {
       subject: day.courseName,
       courseId: parsedData.zoomMeetingId,
       participants,
-      organizer,
+      organizer: organizer || undefined,
       lessonType,
       lessonHours,
       actualStartTime: day.startTime,
@@ -507,12 +507,13 @@ export class FullCourseDocumentGenerator {
     participant: ProcessedParticipant,
     index: number
   ): void {
-    templateData[`partecipante${index}`] = participant.name;
-    templateData[`ingresso${index}m`] = this.formatTime(participant.morningFirstJoin);
-    templateData[`uscita${index}m`] = this.formatTime(participant.morningLastLeave);
-    templateData[`ingresso${index}p`] = this.formatTime(participant.afternoonFirstJoin);
-    templateData[`uscita${index}p`] = this.formatTime(participant.afternoonLastLeave);
-    templateData[`assente${index}`] = participant.isPresent ? '' : 'X';
+    const data = templateData as any;
+    data[`partecipante${index}`] = participant.name;
+    data[`ingresso${index}m`] = this.formatTime(participant.morningFirstJoin);
+    data[`uscita${index}m`] = this.formatTime(participant.morningLastLeave);
+    data[`ingresso${index}p`] = this.formatTime(participant.afternoonFirstJoin);
+    data[`uscita${index}p`] = this.formatTime(participant.afternoonLastLeave);
+    data[`assente${index}`] = participant.isPresent ? '' : 'X';
   }
 
   /**
@@ -523,12 +524,13 @@ export class FullCourseDocumentGenerator {
    * @param index - Participant index (1-5)
    */
   private addEmptyParticipantFields(templateData: WordTemplateData, index: number): void {
-    templateData[`partecipante${index}`] = '';
-    templateData[`ingresso${index}m`] = '';
-    templateData[`uscita${index}m`] = '';
-    templateData[`ingresso${index}p`] = '';
-    templateData[`uscita${index}p`] = '';
-    templateData[`assente${index}`] = '';
+    const data = templateData as any;
+    data[`partecipante${index}`] = '';
+    data[`ingresso${index}m`] = '';
+    data[`uscita${index}m`] = '';
+    data[`ingresso${index}p`] = '';
+    data[`uscita${index}p`] = '';
+    data[`assente${index}`] = '';
   }
 
   // ============================================================================

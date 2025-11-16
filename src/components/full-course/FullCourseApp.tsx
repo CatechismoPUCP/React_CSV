@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CourseSetup } from './CourseSetup/CourseSetup';
 import { CourseDashboard } from './CourseDashboard/CourseDashboard';
 import { FullCourseCSVUpload } from './FullCourseUpload/FullCourseCSVUpload';
+import { AliasManager } from './AliasManager/AliasManager';
 import { CourseData, ParsedFullCourseData } from '../../types/course';
 import { useCourseState } from '../../hooks/useCourseState';
 import { FiArrowLeft, FiLoader } from 'react-icons/fi';
@@ -10,7 +11,7 @@ interface FullCourseAppProps {
   onBackToMenu: () => void;
 }
 
-type CourseAppStep = 'course-list' | 'csv-upload' | 'course-setup' | 'course-dashboard';
+type CourseAppStep = 'course-list' | 'csv-upload' | 'alias-management' | 'course-setup' | 'course-dashboard';
 
 export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) => {
   const [currentStep, setCurrentStep] = useState<CourseAppStep>('course-list');
@@ -42,7 +43,21 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) =>
 
   const handleCSVParsed = (data: ParsedFullCourseData) => {
     setParsedCSVData(data);
+    // Go to alias management if there are suggestions, otherwise skip to setup
+    if (data.aliasSuggestions.length > 0) {
+      setCurrentStep('alias-management');
+    } else {
+      setCurrentStep('course-setup');
+    }
+  };
+
+  const handleAliasManagementComplete = (updatedData: ParsedFullCourseData) => {
+    setParsedCSVData(updatedData);
     setCurrentStep('course-setup');
+  };
+
+  const handleAliasManagementBack = () => {
+    setCurrentStep('csv-upload');
   };
 
   const handleCourseSetupComplete = (courseData: CourseData) => {
@@ -155,6 +170,14 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) =>
         <FullCourseCSVUpload
           onParsed={handleCSVParsed}
           onCancel={handleBackToCourseList}
+        />
+      )}
+
+      {currentStep === 'alias-management' && parsedCSVData && (
+        <AliasManager
+          parsedData={parsedCSVData}
+          onComplete={handleAliasManagementComplete}
+          onBack={handleAliasManagementBack}
         />
       )}
 

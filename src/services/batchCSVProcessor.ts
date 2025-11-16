@@ -518,7 +518,7 @@ export class BatchCSVProcessor {
       subject: courseName,
       courseId: pair.date.replace(/-/g, ''),
       participants,
-      organizer,
+      organizer: organizer || undefined,
       lessonType,
       lessonHours,
     };
@@ -620,7 +620,7 @@ export class BatchCSVProcessor {
     const baseData = this.prepareBaseTemplateData(lessonData);
     const participantsData = this.prepareParticipantsData(lessonData.participants);
 
-    return { ...baseData, ...participantsData };
+    return { ...baseData, ...participantsData } as WordTemplateData;
   }
 
   /**
@@ -691,12 +691,13 @@ export class BatchCSVProcessor {
     participant: any,
     index: number
   ): void {
-    data[`partecipante${index}`] = participant.name;
-    data[`ingresso${index}m`] = this.formatTime(participant.morningFirstJoin);
-    data[`uscita${index}m`] = this.formatTime(participant.morningLastLeave);
-    data[`ingresso${index}p`] = this.formatTime(participant.afternoonFirstJoin);
-    data[`uscita${index}p`] = this.formatTime(participant.afternoonLastLeave);
-    data[`assente${index}`] = participant.isPresent ? '' : 'X';
+    const templateData = data as any;
+    templateData[`partecipante${index}`] = participant.name;
+    templateData[`ingresso${index}m`] = this.formatTime(participant.morningFirstJoin);
+    templateData[`uscita${index}m`] = this.formatTime(participant.morningLastLeave);
+    templateData[`ingresso${index}p`] = this.formatTime(participant.afternoonFirstJoin);
+    templateData[`uscita${index}p`] = this.formatTime(participant.afternoonLastLeave);
+    templateData[`assente${index}`] = participant.isPresent ? '' : 'X';
   }
 
   /**
@@ -707,12 +708,13 @@ export class BatchCSVProcessor {
    * @param index - Participant index (1-5)
    */
   private addEmptyParticipantToTemplate(data: Partial<WordTemplateData>, index: number): void {
-    data[`partecipante${index}`] = '';
-    data[`ingresso${index}m`] = '';
-    data[`uscita${index}m`] = '';
-    data[`ingresso${index}p`] = '';
-    data[`uscita${index}p`] = '';
-    data[`assente${index}`] = '';
+    const templateData = data as any;
+    templateData[`partecipante${index}`] = '';
+    templateData[`ingresso${index}m`] = '';
+    templateData[`uscita${index}m`] = '';
+    templateData[`ingresso${index}p`] = '';
+    templateData[`uscita${index}p`] = '';
+    templateData[`assente${index}`] = '';
   }
 
   // ==========================================================================
