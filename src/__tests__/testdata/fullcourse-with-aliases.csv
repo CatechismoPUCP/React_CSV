@@ -1,0 +1,10 @@
+Argomento,Digita,ID,Nome organizzatore,E-mail organizzatore,Ora di inizio,Ora di fine,Nome (nome originale),E-mail,Ora di ingresso,Ora di uscita,Durata (minuti),Guest,In sala d'attesa
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,19/09/2025 09:00:00 AM,19/09/2025 01:00:00 PM,Prof. Mario Rossi,mario.rossi@test.it,19/09/2025 09:00:00 AM,19/09/2025 01:00:00 PM,240,No,No
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,19/09/2025 09:00:00 AM,19/09/2025 01:00:00 PM,giorgio s.,giorgio.s@test.it,19/09/2025 09:05:00 AM,19/09/2025 12:55:00 PM,230,No,No
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,19/09/2025 09:00:00 AM,19/09/2025 01:00:00 PM,Maria Verdi,maria.verdi@test.it,19/09/2025 09:00:00 AM,19/09/2025 01:00:00 PM,240,No,No
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,20/09/2025 09:00:00 AM,20/09/2025 01:00:00 PM,Prof. Mario Rossi,mario.rossi@test.it,20/09/2025 09:00:00 AM,20/09/2025 01:00:00 PM,240,No,No
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,20/09/2025 09:00:00 AM,20/09/2025 01:00:00 PM,Giorgio Santambrogio,giorgio.s@test.it,20/09/2025 09:10:00 AM,20/09/2025 12:50:00 PM,220,No,No
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,20/09/2025 09:00:00 AM,20/09/2025 01:00:00 PM,Maria Verdi,maria.verdi@test.it,20/09/2025 09:05:00 AM,20/09/2025 12:55:00 PM,230,No,No
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,21/09/2025 02:00:00 PM,21/09/2025 06:00:00 PM,Prof. Mario Rossi,mario.rossi@test.it,21/09/2025 02:00:00 PM,21/09/2025 06:00:00 PM,240,No,No
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,21/09/2025 02:00:00 PM,21/09/2025 06:00:00 PM,G. Santambrogio,giorgio.s@test.it,21/09/2025 02:05:00 PM,21/09/2025 05:55:00 PM,230,No,No
+Corso Completo Test,0,9876543210,Prof. Mario Rossi,mario.rossi@test.it,21/09/2025 02:00:00 PM,21/09/2025 06:00:00 PM,Maria V.,maria.verdi@test.it,21/09/2025 02:00:00 PM,21/09/2025 06:00:00 PM,240,No,No

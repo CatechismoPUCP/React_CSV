@@ -1,0 +1,8 @@
+Argomento,Digita,ID,Nome organizzatore,E-mail organizzatore,Ora di inizio,Ora di fine
+Corso Test,0,1234567890,Prof. Mario Rossi,mario.rossi@test.it,08/07/2025 02:00:00 PM,08/07/2025 06:00:00 PM
+
+Nome (nome originale),E-mail,Ora di ingresso,Ora di uscita,Durata (minuti),Guest,In sala d'attesa
+Prof. Mario Rossi (Organizzatore),mario.rossi@test.it,08/07/2025 02:00:00 PM,08/07/2025 06:00:00 PM,240,No,No
+Giovanni Bianchi,giovanni.bianchi@test.it,08/07/2025 02:05:00 PM,08/07/2025 05:55:00 PM,230,No,No
+Maria Verdi,maria.verdi@test.it,08/07/2025 02:00:00 PM,08/07/2025 06:00:00 PM,240,No,No
+Luca Neri,luca.neri@test.it,08/07/2025 02:00:00 PM,08/07/2025 06:00:00 PM,240,No,No
