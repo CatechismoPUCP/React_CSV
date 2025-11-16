@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { CourseSetup } from './CourseSetup/CourseSetup';
 import { CourseDashboard } from './CourseDashboard/CourseDashboard';
-import { CourseData } from '../../types/course';
+import { FullCourseCSVUpload } from './FullCourseUpload/FullCourseCSVUpload';
+import { CourseData, ParsedFullCourseData } from '../../types/course';
 import { useCourseState } from '../../hooks/useCourseState';
 import { FiArrowLeft, FiLoader } from 'react-icons/fi';
 
@@ -9,19 +10,20 @@ interface FullCourseAppProps {
   onBackToMenu: () => void;
 }
 
-type CourseAppStep = 'course-list' | 'course-setup' | 'course-dashboard';
+type CourseAppStep = 'course-list' | 'csv-upload' | 'course-setup' | 'course-dashboard';
 
 export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) => {
   const [currentStep, setCurrentStep] = useState<CourseAppStep>('course-list');
-  
-  const { 
-    courses, 
-    currentCourse, 
-    isLoading, 
-    error, 
-    loadCourses, 
+  const [parsedCSVData, setParsedCSVData] = useState<ParsedFullCourseData | null>(null);
+
+  const {
+    courses,
+    currentCourse,
+    isLoading,
+    error,
+    loadCourses,
     setCurrentCourse,
-    clearError 
+    clearError
   } = useCourseState();
 
   useEffect(() => {
@@ -34,6 +36,12 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) =>
   };
 
   const handleNewCourse = () => {
+    // Start with CSV upload for full course
+    setCurrentStep('csv-upload');
+  };
+
+  const handleCSVParsed = (data: ParsedFullCourseData) => {
+    setParsedCSVData(data);
     setCurrentStep('course-setup');
   };
 
@@ -44,6 +52,7 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) =>
   const handleBackToCourseList = () => {
     setCurrentStep('course-list');
     setCurrentCourse(null);
+    setParsedCSVData(null);
   };
 
   const handleEditCourse = () => {
@@ -140,6 +149,13 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ onBackToMenu }) =>
             </div>
           )}
         </div>
+      )}
+
+      {currentStep === 'csv-upload' && (
+        <FullCourseCSVUpload
+          onParsed={handleCSVParsed}
+          onCancel={handleBackToCourseList}
+        />
       )}
 
       {currentStep === 'course-setup' && (

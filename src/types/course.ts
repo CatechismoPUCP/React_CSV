@@ -288,3 +288,150 @@ export const DailyLessonDataSchema = z.object({
   }),
   status: z.string(),
 });
+
+/**
+ * ============================================
+ * FULL COURSE CSV PARSING TYPES
+ * ============================================
+ */
+
+/**
+ * Raw CSV row from full course export
+ */
+export interface FullCourseCSVRow {
+  'Argomento': string;
+  'Digita': string;
+  'ID': string;
+  'Nome organizzatore': string;
+  'E-mail organizzatore': string;
+  'Ora di inizio': string;
+  'Ora di fine': string;
+  'Partecipanti': string;
+  'Durata (minuti)': string;
+  'Nome (nome originale)': string;
+  'E-mail': string;
+  'Ora di ingresso': string;
+  'Ora di uscita': string;
+  'Guest': string;
+  'Risposta di esclusione di responsabilità per la registrazione': string;
+  'In sala d\'attesa': string;
+}
+
+/**
+ * Session data for a single participant connection
+ */
+export interface FullCourseSessionData {
+  participantName: string;
+  email: string;
+  joinTime: Date;
+  leaveTime: Date;
+  duration: number;
+  isGuest: boolean;
+  inWaitingRoom: boolean;
+  disclaimerResponse: string;
+}
+
+/**
+ * All sessions for a specific day
+ */
+export interface FullCourseDayData {
+  date: string; // YYYY-MM-DD
+  zoomMeetingId: string;
+  courseName: string;
+  startTime: Date;
+  endTime: Date;
+  sessions: FullCourseSessionData[];
+  participantNames: Set<string>; // unique names for this day
+}
+
+/**
+ * Participant information with aliases
+ */
+export interface FullCourseParticipantInfo {
+  id: string; // unique ID
+  primaryName: string; // canonical name
+  aliases: string[]; // all variations found
+  email: string;
+  isOrganizer: boolean;
+  masterOrder: number; // global order for placeholders
+  daysPresent: string[]; // dates where participant was present
+}
+
+/**
+ * Alias suggestion from automatic detection
+ */
+export interface AliasSuggestion {
+  participantId: string;
+  mainName: string;
+  suggestedAliases: string[];
+  similarityScores: number[]; // 0-1 for each alias
+  autoMerged: boolean;
+  confidence: number; // overall confidence
+}
+
+/**
+ * Mapping of aliases to primary participant
+ */
+export interface AliasMapping {
+  participantId: string;
+  primaryName: string;
+  mergedNames: string[];
+  mergedBy: 'auto' | 'manual';
+  confidence?: number;
+}
+
+/**
+ * Complete parsed data from full course CSV
+ */
+export interface ParsedFullCourseData {
+  courseName: string;
+  zoomMeetingId: string;
+  organizer: {
+    name: string;
+    email: string;
+  };
+  days: FullCourseDayData[];
+  allParticipants: FullCourseParticipantInfo[];
+  aliasSuggestions: AliasSuggestion[];
+  dateRange: {
+    start: string;
+    end: string;
+  };
+  statistics: {
+    totalDays: number;
+    totalParticipants: number;
+    totalSessions: number;
+  };
+}
+
+/**
+ * Participant order for document generation
+ */
+export interface ParticipantOrder {
+  courseId: string;
+  globalOrder: string[]; // participant IDs in order
+  dayOrders?: Map<string, string[]>; // per-day overrides if needed
+}
+
+/**
+ * Document generation result for a single day
+ */
+export interface DayDocumentResult {
+  date: string;
+  filename: string;
+  success: boolean;
+  error?: string;
+  documentData?: ArrayBuffer;
+}
+
+/**
+ * Batch document generation result (ZIP)
+ */
+export interface BatchDocumentResult {
+  success: boolean;
+  zipFilename: string;
+  zipData?: Blob;
+  documents: DayDocumentResult[];
+  totalGenerated: number;
+  totalFailed: number;
+}
