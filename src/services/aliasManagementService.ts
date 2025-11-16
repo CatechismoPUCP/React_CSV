@@ -4,18 +4,83 @@ import {
   AliasMapping,
 } from '../types/course';
 
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Similarity threshold for automatic alias merging (85%+ match) */
+const HIGH_CONFIDENCE_THRESHOLD = 0.85;
+
+/** Similarity threshold for suggesting manual review (70-84% match) */
+const MEDIUM_CONFIDENCE_THRESHOLD = 0.70;
+
+/** Minimum similarity threshold to consider as potential alias (60%+) */
+const LOW_CONFIDENCE_THRESHOLD = 0.60;
+
+/** Weight for containment score in similarity calculation */
+const CONTAINMENT_WEIGHT = 0.4;
+
+/** Weight for Levenshtein distance in similarity calculation */
+const LEVENSHTEIN_WEIGHT = 0.3;
+
+/** Weight for token-based similarity in similarity calculation */
+const TOKEN_WEIGHT = 0.3;
+
+/** Minimum token length to consider in token matching */
+const MIN_TOKEN_LENGTH = 1;
+
+// ============================================================================
+// ALIAS MANAGEMENT SERVICE
+// ============================================================================
+
 /**
- * Service for managing participant aliases and automatic name matching
- * Uses Levenshtein distance and other heuristics to detect similar names
+ * Service for managing participant aliases and automatic name matching.
+ *
+ * This service provides:
+ * - Automatic detection of similar participant names
+ * - Multi-metric similarity scoring:
+ *   - Containment matching (substring detection)
+ *   - Levenshtein distance (edit distance)
+ *   - Token-based similarity (word matching)
+ * - Confidence-based auto-merging
+ * - Alias mapping application
+ *
+ * @remarks
+ * Uses a weighted combination of three similarity algorithms to handle
+ * different name variations (abbreviations, typos, middle names, etc.)
+ *
+ * @example
+ * ```ts
+ * const suggestions = aliasService.detectAliases(participants);
+ * // Returns: [{ mainName: "giorgio s.", suggestedAliases: ["Giorgio santambrogio"], ... }]
+ *
+ * const { mergedParticipants } = aliasService.applyAliasMappings(participants, suggestions);
+ * ```
  */
 export class AliasManagementService {
-  // Thresholds for automatic merging
-  private readonly HIGH_CONFIDENCE_THRESHOLD = 0.85;
-  private readonly MEDIUM_CONFIDENCE_THRESHOLD = 0.70;
-  private readonly LOW_CONFIDENCE_THRESHOLD = 0.60;
+  // ============================================================================
+  // ALIAS DETECTION
+  // ============================================================================
 
   /**
-   * Analyze participants and suggest aliases based on name similarity
+   * Analyzes participants and suggests aliases based on name similarity.
+   *
+   * Compares all participants pairwise to find similar names. Names with
+   * similarity above LOW_CONFIDENCE_THRESHOLD are suggested as potential aliases.
+   * Names with similarity above HIGH_CONFIDENCE_THRESHOLD are automatically merged.
+   *
+   * @param participants - Array of participants to analyze
+   * @returns Array of alias suggestions with confidence scores
+   *
+   * @example
+   * ```ts
+   * const participants = [
+   *   { primaryName: "giorgio s.", ... },
+   *   { primaryName: "Giorgio santambrogio", ... }
+   * ];
+   * const suggestions = service.detectAliases(participants);
+   * // Returns suggestion with confidence ~0.9, auto-merged
+   * ```
    */
   detectAliases(participants: FullCourseParticipantInfo[]): AliasSuggestion[] {
     const suggestions: AliasSuggestion[] = [];
@@ -24,60 +89,23 @@ export class AliasManagementService {
     for (let i = 0; i < participants.length; i++) {
       const participant = participants[i];
 
-      // Skip organizer and already processed
-      if (participant.isOrganizer || processed.has(participant.id)) {
+      if (this.shouldSkipParticipant(participant, processed)) {
         continue;
       }
 
-      const similarParticipants: Array<{
-        participant: FullCourseParticipantInfo;
-        similarity: number;
-      }> = [];
+      const similarParticipants = this.findSimilarParticipants(
+        participant,
+        participants,
+        i,
+        processed
+      );
 
-      // Compare with all other participants
-      for (let j = i + 1; j < participants.length; j++) {
-        const other = participants[j];
-
-        if (other.isOrganizer || processed.has(other.id)) {
-          continue;
-        }
-
-        const similarity = this.calculateNameSimilarity(
-          participant.primaryName,
-          other.primaryName
-        );
-
-        // Only consider if similarity is above low threshold
-        if (similarity >= this.LOW_CONFIDENCE_THRESHOLD) {
-          similarParticipants.push({ participant: other, similarity });
-        }
-      }
-
-      // If we found similar names, create suggestion
       if (similarParticipants.length > 0) {
-        // Sort by similarity (highest first)
-        similarParticipants.sort((a, b) => b.similarity - a.similarity);
+        const suggestion = this.createAliasSuggestion(participant, similarParticipants);
+        suggestions.push(suggestion);
 
-        const suggestedAliases = similarParticipants.map(s => s.participant.primaryName);
-        const similarityScores = similarParticipants.map(s => s.similarity);
-        const maxSimilarity = Math.max(...similarityScores);
-
-        // Auto-merge if high confidence
-        const autoMerged = maxSimilarity >= this.HIGH_CONFIDENCE_THRESHOLD;
-
-        suggestions.push({
-          participantId: participant.id,
-          mainName: participant.primaryName,
-          suggestedAliases,
-          similarityScores,
-          autoMerged,
-          confidence: maxSimilarity,
-        });
-
-        // Mark all as processed if auto-merged
-        if (autoMerged) {
-          processed.add(participant.id);
-          similarParticipants.forEach(s => processed.add(s.participant.id));
+        if (suggestion.autoMerged) {
+          this.markParticipantsAsProcessed(processed, participant, similarParticipants);
         }
       }
     }
@@ -86,8 +114,131 @@ export class AliasManagementService {
   }
 
   /**
-   * Apply alias mappings to participants list
-   * Returns merged participants list
+   * Checks if a participant should be skipped in alias detection.
+   *
+   * @private
+   * @param participant - Participant to check
+   * @param processed - Set of already processed participant IDs
+   * @returns True if participant should be skipped
+   */
+  private shouldSkipParticipant(
+    participant: FullCourseParticipantInfo,
+    processed: Set<string>
+  ): boolean {
+    return participant.isOrganizer || processed.has(participant.id);
+  }
+
+  /**
+   * Finds all participants similar to the given participant.
+   *
+   * @private
+   * @param participant - Participant to compare against
+   * @param allParticipants - Full list of participants
+   * @param startIndex - Index to start comparing from
+   * @param processed - Set of processed participant IDs
+   * @returns Array of similar participants with similarity scores
+   */
+  private findSimilarParticipants(
+    participant: FullCourseParticipantInfo,
+    allParticipants: FullCourseParticipantInfo[],
+    startIndex: number,
+    processed: Set<string>
+  ): Array<{ participant: FullCourseParticipantInfo; similarity: number }> {
+    const similarParticipants: Array<{
+      participant: FullCourseParticipantInfo;
+      similarity: number;
+    }> = [];
+
+    for (let j = startIndex + 1; j < allParticipants.length; j++) {
+      const other = allParticipants[j];
+
+      if (this.shouldSkipParticipant(other, processed)) {
+        continue;
+      }
+
+      const similarity = this.calculateNameSimilarity(
+        participant.primaryName,
+        other.primaryName
+      );
+
+      if (similarity >= LOW_CONFIDENCE_THRESHOLD) {
+        similarParticipants.push({ participant: other, similarity });
+      }
+    }
+
+    return similarParticipants.sort((a, b) => b.similarity - a.similarity);
+  }
+
+  /**
+   * Creates an alias suggestion from similar participants.
+   *
+   * @private
+   * @param participant - Main participant
+   * @param similarParticipants - Array of similar participants with scores
+   * @returns Alias suggestion object
+   */
+  private createAliasSuggestion(
+    participant: FullCourseParticipantInfo,
+    similarParticipants: Array<{ participant: FullCourseParticipantInfo; similarity: number }>
+  ): AliasSuggestion {
+    const suggestedAliases = similarParticipants.map(s => s.participant.primaryName);
+    const similarityScores = similarParticipants.map(s => s.similarity);
+    const maxSimilarity = Math.max(...similarityScores);
+    const autoMerged = maxSimilarity >= HIGH_CONFIDENCE_THRESHOLD;
+
+    return {
+      participantId: participant.id,
+      mainName: participant.primaryName,
+      suggestedAliases,
+      similarityScores,
+      autoMerged,
+      confidence: maxSimilarity,
+    };
+  }
+
+  /**
+   * Marks participants as processed to avoid duplicate suggestions.
+   *
+   * @private
+   * @param processed - Set to add IDs to
+   * @param mainParticipant - Main participant
+   * @param similarParticipants - Similar participants to mark
+   */
+  private markParticipantsAsProcessed(
+    processed: Set<string>,
+    mainParticipant: FullCourseParticipantInfo,
+    similarParticipants: Array<{ participant: FullCourseParticipantInfo; similarity: number }>
+  ): void {
+    processed.add(mainParticipant.id);
+    similarParticipants.forEach(s => processed.add(s.participant.id));
+  }
+
+  // ============================================================================
+  // ALIAS APPLICATION
+  // ============================================================================
+
+  /**
+   * Applies alias mappings to participants list.
+   *
+   * Merges participants based on auto-merged suggestions:
+   * - Combines aliases into a single participant
+   * - Merges days present from all aliases
+   * - Preserves email addresses (uses first non-empty)
+   * - Maintains master ordering
+   *
+   * @param participants - Original participants list
+   * @param suggestions - Alias suggestions from detectAliases
+   * @returns Object with merged participants and mapping records
+   *
+   * @example
+   * ```ts
+   * const { mergedParticipants, mappings } = service.applyAliasMappings(
+   *   participants,
+   *   suggestions
+   * );
+   * // mergedParticipants.length < participants.length (duplicates merged)
+   * // mappings contains record of all merges
+   * ```
    */
   applyAliasMappings(
     participants: FullCourseParticipantInfo[],
@@ -97,102 +248,215 @@ export class AliasManagementService {
     mappings: AliasMapping[];
   } {
     const mappings: AliasMapping[] = [];
-    const participantMap = new Map<string, FullCourseParticipantInfo>();
-
-    // Initialize map with all participants
-    participants.forEach(p => participantMap.set(p.id, { ...p }));
+    const participantMap = this.initializeParticipantMap(participants);
 
     // Apply auto-merged suggestions
     for (const suggestion of suggestions) {
       if (!suggestion.autoMerged) continue;
 
-      const mainParticipant = participantMap.get(suggestion.participantId);
-      if (!mainParticipant) continue;
-
-      const mergedNames: string[] = [mainParticipant.primaryName];
-      const mergedDays = new Set(mainParticipant.daysPresent);
-
-      // Find and merge similar participants
-      for (let i = 0; i < suggestion.suggestedAliases.length; i++) {
-        const aliasName = suggestion.suggestedAliases[i];
-        const similarity = suggestion.similarityScores[i];
-
-        // Only merge if high similarity
-        if (similarity < this.HIGH_CONFIDENCE_THRESHOLD) continue;
-
-        // Find participant with this name
-        const aliasParticipant = Array.from(participantMap.values()).find(
-          p => p.primaryName === aliasName
-        );
-
-        if (!aliasParticipant) continue;
-
-        // Merge data
-        mergedNames.push(aliasParticipant.primaryName);
-        aliasParticipant.daysPresent.forEach(day => mergedDays.add(day));
-
-        // Use email from alias if main doesn't have one
-        if (!mainParticipant.email && aliasParticipant.email) {
-          mainParticipant.email = aliasParticipant.email;
-        }
-
-        // Remove merged participant
-        participantMap.delete(aliasParticipant.id);
+      const mapping = this.mergeSuggestion(participantMap, suggestion);
+      if (mapping) {
+        mappings.push(mapping);
       }
-
-      // Update main participant
-      mainParticipant.aliases = mergedNames;
-      mainParticipant.daysPresent = Array.from(mergedDays).sort();
-
-      // Create mapping record
-      mappings.push({
-        participantId: mainParticipant.id,
-        primaryName: mainParticipant.primaryName,
-        mergedNames,
-        mergedBy: 'auto',
-        confidence: suggestion.confidence,
-      });
     }
 
-    const mergedParticipants = Array.from(participantMap.values())
-      .sort((a, b) => a.masterOrder - b.masterOrder);
+    const mergedParticipants = this.extractSortedParticipants(participantMap);
 
     return { mergedParticipants, mappings };
   }
 
   /**
-   * Calculate name similarity using multiple heuristics
-   * Returns a score between 0 (completely different) and 1 (identical)
+   * Initializes participant map from array.
+   *
+   * @private
+   * @param participants - Array of participants
+   * @returns Map of participant ID to participant data
+   */
+  private initializeParticipantMap(
+    participants: FullCourseParticipantInfo[]
+  ): Map<string, FullCourseParticipantInfo> {
+    const map = new Map<string, FullCourseParticipantInfo>();
+    participants.forEach(p => map.set(p.id, { ...p }));
+    return map;
+  }
+
+  /**
+   * Merges a single alias suggestion into the participant map.
+   *
+   * @private
+   * @param participantMap - Map to merge into
+   * @param suggestion - Alias suggestion to merge
+   * @returns Alias mapping record, or null if merge failed
+   */
+  private mergeSuggestion(
+    participantMap: Map<string, FullCourseParticipantInfo>,
+    suggestion: AliasSuggestion
+  ): AliasMapping | null {
+    const mainParticipant = participantMap.get(suggestion.participantId);
+    if (!mainParticipant) return null;
+
+    const mergedNames: string[] = [mainParticipant.primaryName];
+    const mergedDays = new Set(mainParticipant.daysPresent);
+
+    // Process each suggested alias
+    for (let i = 0; i < suggestion.suggestedAliases.length; i++) {
+      const aliasName = suggestion.suggestedAliases[i];
+      const similarity = suggestion.similarityScores[i];
+
+      if (similarity < HIGH_CONFIDENCE_THRESHOLD) continue;
+
+      this.mergeAliasIntoMain(
+        participantMap,
+        mainParticipant,
+        aliasName,
+        mergedNames,
+        mergedDays
+      );
+    }
+
+    // Update main participant with merged data
+    mainParticipant.aliases = mergedNames;
+    mainParticipant.daysPresent = Array.from(mergedDays).sort();
+
+    return {
+      participantId: mainParticipant.id,
+      primaryName: mainParticipant.primaryName,
+      mergedNames,
+      mergedBy: 'auto',
+      confidence: suggestion.confidence,
+    };
+  }
+
+  /**
+   * Merges an alias participant into the main participant.
+   *
+   * @private
+   * @param participantMap - Participant map
+   * @param mainParticipant - Main participant to merge into
+   * @param aliasName - Name of alias to merge
+   * @param mergedNames - Array to add merged names to
+   * @param mergedDays - Set to add merged days to
+   */
+  private mergeAliasIntoMain(
+    participantMap: Map<string, FullCourseParticipantInfo>,
+    mainParticipant: FullCourseParticipantInfo,
+    aliasName: string,
+    mergedNames: string[],
+    mergedDays: Set<string>
+  ): void {
+    const aliasParticipant = this.findParticipantByName(participantMap, aliasName);
+    if (!aliasParticipant) return;
+
+    // Merge data
+    mergedNames.push(aliasParticipant.primaryName);
+    aliasParticipant.daysPresent.forEach(day => mergedDays.add(day));
+
+    // Use alias email if main doesn't have one
+    if (!mainParticipant.email && aliasParticipant.email) {
+      mainParticipant.email = aliasParticipant.email;
+    }
+
+    // Remove merged participant from map
+    participantMap.delete(aliasParticipant.id);
+  }
+
+  /**
+   * Finds a participant by primary name.
+   *
+   * @private
+   * @param participantMap - Map to search
+   * @param name - Primary name to find
+   * @returns Participant or undefined if not found
+   */
+  private findParticipantByName(
+    participantMap: Map<string, FullCourseParticipantInfo>,
+    name: string
+  ): FullCourseParticipantInfo | undefined {
+    return Array.from(participantMap.values()).find(p => p.primaryName === name);
+  }
+
+  /**
+   * Extracts participants from map and sorts by master order.
+   *
+   * @private
+   * @param participantMap - Map to extract from
+   * @returns Sorted array of participants
+   */
+  private extractSortedParticipants(
+    participantMap: Map<string, FullCourseParticipantInfo>
+  ): FullCourseParticipantInfo[] {
+    return Array.from(participantMap.values()).sort((a, b) => a.masterOrder - b.masterOrder);
+  }
+
+  // ============================================================================
+  // SIMILARITY CALCULATION
+  // ============================================================================
+
+  /**
+   * Calculates name similarity using multiple heuristics.
+   *
+   * Combines three similarity metrics with weighted average:
+   * - 40% Containment score (substring matching)
+   * - 30% Levenshtein distance (edit distance)
+   * - 30% Token similarity (word-based Jaccard)
+   *
+   * @private
+   * @param name1 - First name to compare
+   * @param name2 - Second name to compare
+   * @returns Similarity score between 0 (completely different) and 1 (identical)
+   *
+   * @example
+   * ```ts
+   * const similarity = this.calculateNameSimilarity("giorgio s.", "Giorgio santambrogio");
+   * // Returns: ~0.9 (high similarity due to containment and token match)
+   * ```
    */
   private calculateNameSimilarity(name1: string, name2: string): number {
     const normalized1 = this.normalizeName(name1);
     const normalized2 = this.normalizeName(name2);
 
-    // Exact match
+    // Exact match check
     if (normalized1 === normalized2) {
       return 1.0;
     }
 
-    // Check if one is contained in the other (e.g., "giorgio s." vs "Giorgio santambrogio")
+    // Calculate individual similarity metrics
     const containmentScore = this.calculateContainmentScore(normalized1, normalized2);
-
-    // Levenshtein distance
     const levenshteinScore = this.calculateLevenshteinSimilarity(normalized1, normalized2);
-
-    // Token-based similarity (individual words)
     const tokenScore = this.calculateTokenSimilarity(normalized1, normalized2);
 
     // Weighted average
     const similarity =
-      containmentScore * 0.4 +
-      levenshteinScore * 0.3 +
-      tokenScore * 0.3;
+      containmentScore * CONTAINMENT_WEIGHT +
+      levenshteinScore * LEVENSHTEIN_WEIGHT +
+      tokenScore * TOKEN_WEIGHT;
 
     return similarity;
   }
 
+  // ============================================================================
+  // NAME NORMALIZATION
+  // ============================================================================
+
   /**
-   * Normalize name for comparison
+   * Normalizes a name for comparison.
+   *
+   * Normalization steps:
+   * 1. Convert to lowercase
+   * 2. Decompose accented characters (NFD normalization)
+   * 3. Remove diacritics (é → e, à → a, etc.)
+   * 4. Remove special characters
+   * 5. Trim whitespace
+   *
+   * @private
+   * @param name - Name to normalize
+   * @returns Normalized name string
+   *
+   * @example
+   * ```ts
+   * const normalized = this.normalizeName("José María");
+   * // Returns: "jose maria"
+   * ```
    */
   private normalizeName(name: string): string {
     return name
@@ -203,25 +467,57 @@ export class AliasManagementService {
       .trim();
   }
 
+  // ============================================================================
+  // CONTAINMENT SCORING
+  // ============================================================================
+
   /**
-   * Check if one name contains the other
+   * Calculates containment score between two names.
+   *
+   * Checks if one name is contained within the other, either as a substring
+   * or through token matching. Useful for detecting abbreviations and
+   * shortened names.
+   *
+   * @private
+   * @param name1 - First normalized name
+   * @param name2 - Second normalized name
+   * @returns Containment score (0-1)
+   *
+   * @example
+   * ```ts
+   * const score = this.calculateContainmentScore("giorgio s", "giorgio santambrogio");
+   * // Returns: ~0.7 ("giorgio s" is contained in longer name)
+   * ```
    */
   private calculateContainmentScore(name1: string, name2: string): number {
     const shorter = name1.length < name2.length ? name1 : name2;
     const longer = name1.length < name2.length ? name2 : name1;
 
+    // Direct substring containment
     if (longer.includes(shorter)) {
       return shorter.length / longer.length;
     }
 
-    // Check individual tokens
-    const tokens1 = name1.split(/\s+/).filter(t => t.length > 1);
-    const tokens2 = name2.split(/\s+/).filter(t => t.length > 1);
+    // Token-based containment
+    return this.calculateTokenContainment(name1, name2);
+  }
+
+  /**
+   * Calculates token-based containment score.
+   *
+   * @private
+   * @param name1 - First name
+   * @param name2 - Second name
+   * @returns Token containment score
+   */
+  private calculateTokenContainment(name1: string, name2: string): number {
+    const tokens1 = name1.split(/\s+/).filter(t => t.length > MIN_TOKEN_LENGTH);
+    const tokens2 = name2.split(/\s+/).filter(t => t.length > MIN_TOKEN_LENGTH);
 
     let matches = 0;
     for (const token1 of tokens1) {
       for (const token2 of tokens2) {
-        if (token1 === token2 || token1.includes(token2) || token2.includes(token1)) {
+        if (this.tokensMatch(token1, token2)) {
           matches++;
           break;
         }
@@ -232,7 +528,37 @@ export class AliasManagementService {
   }
 
   /**
-   * Calculate similarity using Levenshtein distance
+   * Checks if two tokens match (equal or one contains the other).
+   *
+   * @private
+   * @param token1 - First token
+   * @param token2 - Second token
+   * @returns True if tokens match
+   */
+  private tokensMatch(token1: string, token2: string): boolean {
+    return token1 === token2 || token1.includes(token2) || token2.includes(token1);
+  }
+
+  // ============================================================================
+  // LEVENSHTEIN DISTANCE
+  // ============================================================================
+
+  /**
+   * Calculates similarity using Levenshtein distance.
+   *
+   * Levenshtein distance measures the minimum number of single-character edits
+   * (insertions, deletions, substitutions) needed to change one string into another.
+   *
+   * @private
+   * @param str1 - First string
+   * @param str2 - Second string
+   * @returns Similarity score (0-1), where 1 is identical
+   *
+   * @example
+   * ```ts
+   * const similarity = this.calculateLevenshteinSimilarity("kitten", "sitting");
+   * // Returns: ~0.57 (3 edits needed out of 7 characters)
+   * ```
    */
   private calculateLevenshteinSimilarity(str1: string, str2: string): number {
     const distance = this.levenshteinDistance(str1, str2);
@@ -244,28 +570,33 @@ export class AliasManagementService {
   }
 
   /**
-   * Levenshtein distance algorithm
+   * Implements the Levenshtein distance algorithm.
+   *
+   * Uses dynamic programming to compute the minimum edit distance.
+   *
+   * @private
+   * @param str1 - First string
+   * @param str2 - Second string
+   * @returns Edit distance (number of operations)
+   *
+   * @example
+   * ```ts
+   * const distance = this.levenshteinDistance("kitten", "sitting");
+   * // Returns: 3 (k→s, e→i, insert g)
+   * ```
    */
   private levenshteinDistance(str1: string, str2: string): number {
     const len1 = str1.length;
     const len2 = str2.length;
-    const matrix: number[][] = [];
+    const matrix = this.initializeLevenshteinMatrix(len1, len2);
 
-    // Initialize matrix
-    for (let i = 0; i <= len1; i++) {
-      matrix[i] = [i];
-    }
-    for (let j = 0; j <= len2; j++) {
-      matrix[0][j] = j;
-    }
-
-    // Fill matrix
+    // Fill matrix using dynamic programming
     for (let i = 1; i <= len1; i++) {
       for (let j = 1; j <= len2; j++) {
         const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
         matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1,     // deletion
-          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1,       // deletion
+          matrix[i][j - 1] + 1,       // insertion
           matrix[i - 1][j - 1] + cost // substitution
         );
       }
@@ -275,16 +606,60 @@ export class AliasManagementService {
   }
 
   /**
-   * Calculate token-based similarity
+   * Initializes the Levenshtein distance matrix.
+   *
+   * @private
+   * @param len1 - Length of first string
+   * @param len2 - Length of second string
+   * @returns Initialized matrix
+   */
+  private initializeLevenshteinMatrix(len1: number, len2: number): number[][] {
+    const matrix: number[][] = [];
+
+    // Initialize first column (deletions)
+    for (let i = 0; i <= len1; i++) {
+      matrix[i] = [i];
+    }
+
+    // Initialize first row (insertions)
+    for (let j = 0; j <= len2; j++) {
+      matrix[0][j] = j;
+    }
+
+    return matrix;
+  }
+
+  // ============================================================================
+  // TOKEN SIMILARITY (JACCARD)
+  // ============================================================================
+
+  /**
+   * Calculates token-based similarity using Jaccard index.
+   *
+   * Splits names into words (tokens) and calculates the Jaccard similarity:
+   * size(intersection) / size(union)
+   *
+   * Useful for detecting name reordering and middle name variations.
+   *
+   * @private
+   * @param name1 - First normalized name
+   * @param name2 - Second normalized name
+   * @returns Jaccard similarity (0-1)
+   *
+   * @example
+   * ```ts
+   * const similarity = this.calculateTokenSimilarity("john paul smith", "smith john");
+   * // Returns: 0.67 (2 common words out of 3 unique words)
+   * ```
    */
   private calculateTokenSimilarity(name1: string, name2: string): number {
-    const tokens1 = new Set(name1.split(/\s+/).filter(t => t.length > 1));
-    const tokens2 = new Set(name2.split(/\s+/).filter(t => t.length > 1));
+    const tokens1 = this.extractTokens(name1);
+    const tokens2 = this.extractTokens(name2);
 
     if (tokens1.size === 0 && tokens2.size === 0) return 1.0;
     if (tokens1.size === 0 || tokens2.size === 0) return 0.0;
 
-    // Calculate Jaccard similarity
+    // Calculate Jaccard similarity: |intersection| / |union|
     const intersection = new Set([...tokens1].filter(t => tokens2.has(t)));
     const union = new Set([...tokens1, ...tokens2]);
 
@@ -292,14 +667,50 @@ export class AliasManagementService {
   }
 
   /**
-   * Get confidence level description
+   * Extracts tokens from a name string.
+   *
+   * @private
+   * @param name - Name to tokenize
+   * @returns Set of tokens (filtered for minimum length)
+   */
+  private extractTokens(name: string): Set<string> {
+    return new Set(name.split(/\s+/).filter(t => t.length > MIN_TOKEN_LENGTH));
+  }
+
+  // ============================================================================
+  // CONFIDENCE UTILITIES
+  // ============================================================================
+
+  /**
+   * Gets a descriptive confidence level from a numeric confidence score.
+   *
+   * @param confidence - Confidence score (0-1)
+   * @returns Confidence level descriptor
+   *
+   * @example
+   * ```ts
+   * const level = service.getConfidenceLevel(0.9);
+   * // Returns: "high"
+   * ```
    */
   getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low' {
-    if (confidence >= this.HIGH_CONFIDENCE_THRESHOLD) return 'high';
-    if (confidence >= this.MEDIUM_CONFIDENCE_THRESHOLD) return 'medium';
+    if (confidence >= HIGH_CONFIDENCE_THRESHOLD) return 'high';
+    if (confidence >= MEDIUM_CONFIDENCE_THRESHOLD) return 'medium';
     return 'low';
   }
 }
 
-// Singleton instance
+// ============================================================================
+// SINGLETON EXPORT
+// ============================================================================
+
+/**
+ * Singleton instance of AliasManagementService for application-wide use.
+ *
+ * @example
+ * ```ts
+ * import { aliasManagementService } from './aliasManagementService';
+ * const suggestions = aliasManagementService.detectAliases(participants);
+ * ```
+ */
 export const aliasManagementService = new AliasManagementService();
