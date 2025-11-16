@@ -1,7 +1,7 @@
 import React from 'react';
 import { FiCalendar, FiFileText, FiUsers, FiClock } from 'react-icons/fi';
 
-export type AppMode = 'single-day' | 'full-course';
+export type AppMode = 'single-day' | 'batch-course' | 'full-course';
 
 interface MainMenuProps {
   onModeSelect: (mode: AppMode) => void;
@@ -36,7 +36,28 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onModeSelect }) => {
           <div className="option-arrow">→</div>
         </div>
 
-        <div 
+        <div
+          className="menu-option"
+          onClick={() => onModeSelect('batch-course')}
+        >
+          <div className="option-icon">
+            <FiUsers />
+          </div>
+          <div className="option-content">
+            <h3>Tutto il Corso (Batch)</h3>
+            <p>Carica tutti i CSV del corso e genera tutti i documenti in batch</p>
+            <ul>
+              <li>Upload multiplo CSV (tutte le mattine e pomeriggi)</li>
+              <li>Raggruppamento automatico per giorno</li>
+              <li>Controllo partecipanti e host per ogni giorno</li>
+              <li>Generazione batch di tutti i documenti</li>
+              <li>Download ZIP con tutti i file</li>
+            </ul>
+          </div>
+          <div className="option-arrow">→</div>
+        </div>
+
+        <div
           className="menu-option"
           onClick={() => onModeSelect('full-course')}
         >

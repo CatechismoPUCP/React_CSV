@@ -8,3 +8,6 @@ export { fullCourseParsingService, FullCourseParsingService } from './fullCourse
 export { aliasManagementService, AliasManagementService } from './aliasManagementService';
 export { fullCourseProcessor, FullCourseProcessor } from './fullCourseProcessor';
 export { fullCourseDocumentGenerator, FullCourseDocumentGenerator } from './fullCourseDocumentGenerator';
+
+// Batch course services
+export { batchCSVProcessor, BatchCSVProcessor } from './batchCSVProcessor';

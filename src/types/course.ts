@@ -435,3 +435,78 @@ export interface BatchDocumentResult {
   totalGenerated: number;
   totalFailed: number;
 }
+
+/**
+ * ============================================
+ * BATCH CSV PROCESSING TYPES (Multiple Day-by-Day CSVs)
+ * ============================================
+ */
+
+/**
+ * CSV file with metadata and period detection
+ */
+export interface BatchCSVFile {
+  file: File;
+  fileName: string;
+  period: 'morning' | 'afternoon' | 'unknown';
+  detectedDate?: string; // YYYY-MM-DD
+  participantCount?: number;
+  uploadedAt: Date;
+}
+
+/**
+ * Paired CSV files for a single day
+ */
+export interface DayCSVPair {
+  date: string; // YYYY-MM-DD
+  morningFile?: BatchCSVFile;
+  afternoonFile?: BatchCSVFile;
+  isComplete: boolean; // both morning and afternoon present
+  participantCount: number;
+}
+
+/**
+ * Batch processing state
+ */
+export interface BatchProcessingState {
+  status: 'idle' | 'uploading' | 'analyzing' | 'ready' | 'processing' | 'completed' | 'error';
+  uploadedFiles: BatchCSVFile[];
+  dayPairs: DayCSVPair[];
+  currentDay?: string;
+  progress: {
+    current: number;
+    total: number;
+  };
+  error?: string;
+}
+
+/**
+ * Processed day result for batch
+ */
+export interface BatchDayResult {
+  date: string;
+  success: boolean;
+  lessonData?: ProcessedLessonData;
+  documentGenerated: boolean;
+  documentFilename?: string;
+  error?: string;
+  participantCount?: number;
+}
+
+/**
+ * Complete batch processing result
+ */
+export interface CompleteBatchResult {
+  success: boolean;
+  totalDays: number;
+  successfulDays: number;
+  failedDays: number;
+  dayResults: BatchDayResult[];
+  zipFilename?: string;
+  zipData?: Blob;
+  courseName?: string;
+  dateRange?: {
+    start: string;
+    end: string;
+  };
+}
