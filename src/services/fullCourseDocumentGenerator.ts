@@ -608,20 +608,84 @@ export class FullCourseDocumentGenerator {
    * @example
    * ```ts
    * const text = this.getScheduleText(lessonData);
-   * // Returns: "09:00 - 13:00 / 14:00 - 18:00"
+   * // Returns: "14:00 - 18:00" for afternoon only
+   * // Returns: "09:00 - 13:00 / 14:00 - 18:00" for both
    * ```
    */
   private getScheduleText(lessonData: LessonData): string {
     const hours = lessonData.lessonHours || [];
     if (hours.length === 0) return '';
 
-    if (hours.length === 2) {
-      return `${this.formatHour(hours[0])} - ${this.formatHour(hours[1])}`;
-    } else if (hours.length === 4) {
-      return `${this.formatHour(hours[0])} - ${this.formatHour(hours[1])} / ${this.formatHour(hours[2])} - ${this.formatHour(hours[3])}`;
+    const sortedHours = [...hours].sort((a, b) => a - b);
+
+    // Separate morning (9-13) and afternoon (14-18) hours
+    const morningHours = sortedHours.filter(h => h >= 9 && h <= 13);
+    const afternoonHours = sortedHours.filter(h => h >= 14 && h <= 18);
+
+    const allParticipants = lessonData.organizer
+      ? [...lessonData.participants, lessonData.organizer]
+      : lessonData.participants;
+
+    if (morningHours.length > 0 && afternoonHours.length > 0) {
+      // Both morning and afternoon
+      const morningStart = Math.min(...morningHours);
+      const morningEnd = this.getActualSessionEndHour(allParticipants, 'morning');
+      const afternoonStart = Math.min(...afternoonHours);
+      const afternoonEnd = this.getActualSessionEndHour(allParticipants, 'afternoon');
+      return `${this.formatHourSimple(morningStart)}:00 - ${this.formatHourSimple(morningEnd)}:00 / ${this.formatHourSimple(afternoonStart)}:00 - ${this.formatHourSimple(afternoonEnd)}:00`;
+    } else if (morningHours.length > 0) {
+      // Morning only
+      const start = Math.min(...morningHours);
+      const end = this.getActualSessionEndHour(allParticipants, 'morning');
+      return `${this.formatHourSimple(start)}:00 - ${this.formatHourSimple(end)}:00`;
+    } else if (afternoonHours.length > 0) {
+      // Afternoon only
+      const start = Math.min(...afternoonHours);
+      const end = this.getActualSessionEndHour(allParticipants, 'afternoon');
+      return `${this.formatHourSimple(start)}:00 - ${this.formatHourSimple(end)}:00`;
     }
 
     return '';
+  }
+
+  /**
+   * Gets actual session end hour from participant data.
+   *
+   * @private
+   * @param participants - Array of participants
+   * @param period - 'morning' or 'afternoon'
+   * @returns End hour
+   */
+  private getActualSessionEndHour(
+    participants: ProcessedParticipant[],
+    period: 'morning' | 'afternoon'
+  ): number {
+    const times = participants
+      .map(p => period === 'morning' ? p.morningLastLeave : p.afternoonLastLeave)
+      .filter(t => t !== undefined) as Date[];
+
+    if (times.length === 0) {
+      // Fallback to defaults
+      return period === 'morning' ? 13 : 18;
+    }
+
+    const latestLeave = new Date(Math.max(...times.map(t => t.getTime())));
+    const hour = latestLeave.getHours();
+    const minutes = latestLeave.getMinutes();
+
+    // Round up if there are significant minutes
+    return minutes > 30 ? hour + 1 : hour;
+  }
+
+  /**
+   * Formats hour as simple 2-digit string.
+   *
+   * @private
+   * @param hour - Hour number
+   * @returns Formatted hour (e.g., "09", "14")
+   */
+  private formatHourSimple(hour: number): string {
+    return hour.toString().padStart(2, '0');
   }
 
   /**
