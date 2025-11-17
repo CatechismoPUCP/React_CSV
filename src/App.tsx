@@ -185,7 +185,10 @@ function App() {
       )}
 
       {currentMode === 'full-course' && (
-        <FullCourseApp onBackToMenu={handleBackToMenu} />
+        <FullCourseApp
+          templateFile={currentTemplateFile}
+          onBackToMenu={handleBackToMenu}
+        />
       )}
 
       <style>{`
