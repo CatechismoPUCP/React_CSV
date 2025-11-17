@@ -3,8 +3,8 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ParsedFullCourseData } from '../../types/course';
-import { FiMove, FiChevronDown, FiChevronRight, FiUsers, FiCalendar, FiCheck } from 'react-icons/fi';
+import { ParsedFullCourseData, FullCourseParticipantInfo } from '../../types/course';
+import { FiMove, FiUsers, FiCalendar, FiCheck, FiStar } from 'react-icons/fi';
 
 interface FullCourseParticipantEditorProps {
   parsedData: ParsedFullCourseData;
@@ -12,17 +12,19 @@ interface FullCourseParticipantEditorProps {
   onBack: () => void;
 }
 
-interface DayParticipantList {
-  date: string;
-  participants: string[];
-}
-
 interface SortableParticipantItemProps {
-  participant: string;
+  participant: FullCourseParticipantInfo;
   index: number;
+  isOrganizer: boolean;
+  onSetOrganizer: () => void;
 }
 
-const SortableParticipantItem: React.FC<SortableParticipantItemProps> = ({ participant, index }) => {
+const SortableParticipantItem: React.FC<SortableParticipantItemProps> = ({
+  participant,
+  index,
+  isOrganizer,
+  onSetOrganizer,
+}) => {
   const {
     attributes,
     listeners,
@@ -44,13 +46,26 @@ const SortableParticipantItem: React.FC<SortableParticipantItemProps> = ({ parti
     <div
       ref={setNodeRef}
       style={style}
-      className="sortable-participant-item"
+      className={`sortable-participant-item ${isOrganizer ? 'is-organizer' : ''}`}
     >
       <div className="drag-handle" {...attributes} {...listeners}>
         <FiMove />
       </div>
       <span className="participant-number">#{index + 1}</span>
-      <span className="participant-name">{participant}</span>
+      <span className="participant-name">{participant.primaryName}</span>
+      <div className="participant-info">
+        <span className="participant-days">
+          {participant.daysPresent.length} {participant.daysPresent.length === 1 ? 'giorno' : 'giorni'}
+        </span>
+      </div>
+      <button
+        onClick={onSetOrganizer}
+        className={`btn-organizer ${isOrganizer ? 'active' : ''}`}
+        title={isOrganizer ? 'Organizzatore' : 'Imposta come organizzatore'}
+      >
+        <FiStar />
+        {isOrganizer && <span className="organizer-label">Organizzatore</span>}
+      </button>
     </div>
   );
 };
@@ -60,17 +75,17 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
   onComplete,
   onBack,
 }) => {
-  // Initialize participant lists for each day
-  const [dayParticipants, setDayParticipants] = useState<DayParticipantList[]>(() => {
-    return parsedData.days.map(day => ({
-      date: day.date,
-      participants: Array.from(day.participantNames).sort(),
-    }));
+  // Initialize global participant list (all participants across all days)
+  const [participants, setParticipants] = useState<FullCourseParticipantInfo[]>(() => {
+    // Sort by masterOrder initially
+    return [...parsedData.allParticipants].sort((a, b) => a.masterOrder - b.masterOrder);
   });
 
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(
-    new Set(parsedData.days.map(d => d.date))
-  );
+  // Track who is the organizer
+  const [organizerIndex, setOrganizerIndex] = useState<number>(() => {
+    // Find current organizer
+    return participants.findIndex(p => p.isOrganizer);
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -79,65 +94,64 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
     })
   );
 
-  const toggleDay = (date: string) => {
-    const newExpanded = new Set(expandedDays);
-    if (newExpanded.has(date)) {
-      newExpanded.delete(date);
-    } else {
-      newExpanded.add(date);
-    }
-    setExpandedDays(newExpanded);
-  };
-
-  const handleDragEnd = (dayDate: string) => (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
-    const dayIndex = dayParticipants.findIndex(d => d.date === dayDate);
-    if (dayIndex === -1) return;
 
     const activeIndex = parseInt(active.id.toString().replace('participant-', ''));
     const overIndex = parseInt(over.id.toString().replace('participant-', ''));
 
-    const newDayParticipants = [...dayParticipants];
-    newDayParticipants[dayIndex] = {
-      ...newDayParticipants[dayIndex],
-      participants: arrayMove(newDayParticipants[dayIndex].participants, activeIndex, overIndex),
-    };
+    const reordered = arrayMove(participants, activeIndex, overIndex);
+    setParticipants(reordered);
 
-    setDayParticipants(newDayParticipants);
+    // Update organizer index if affected
+    if (activeIndex === organizerIndex) {
+      setOrganizerIndex(overIndex);
+    } else if (activeIndex < organizerIndex && overIndex >= organizerIndex) {
+      setOrganizerIndex(organizerIndex - 1);
+    } else if (activeIndex > organizerIndex && overIndex <= organizerIndex) {
+      setOrganizerIndex(organizerIndex + 1);
+    }
+  };
+
+  const handleSetOrganizer = (index: number) => {
+    setOrganizerIndex(index);
+
+    // Update isOrganizer flag in participants
+    const updated = participants.map((p, i) => ({
+      ...p,
+      isOrganizer: i === index,
+    }));
+    setParticipants(updated);
   };
 
   const handleComplete = () => {
-    // Create updated data with participant order
-    const updatedData = {
+    // Create updated data with participant order and organizer info
+    const updatedParticipants = participants.map((p, idx) => ({
+      ...p,
+      masterOrder: idx,
+      isOrganizer: idx === organizerIndex,
+    }));
+
+    const updatedData: ParsedFullCourseData = {
       ...parsedData,
-      days: parsedData.days.map((day, index) => ({
-        ...day,
-        participantOrder: dayParticipants[index]?.participants || Array.from(day.participantNames),
-      })),
+      allParticipants: updatedParticipants,
+      organizer: organizerIndex >= 0 ? {
+        name: updatedParticipants[organizerIndex].primaryName,
+        email: updatedParticipants[organizerIndex].email,
+      } : parsedData.organizer,
     };
 
     onComplete(updatedData);
-  };
-
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('it-IT', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
   };
 
   return (
     <div className="full-course-participant-editor">
       <div className="editor-header">
         <div className="header-content">
-          <h2>Ordina Partecipanti</h2>
+          <h2>Ordina Partecipanti e Seleziona Organizzatore</h2>
           <p className="subtitle">
-            Trascina i partecipanti per definire l'ordine nel documento Word
+            Trascina per ordinare i partecipanti e clicca sulla stella per scegliere l'organizzatore
           </p>
         </div>
         <div className="course-summary">
@@ -152,55 +166,36 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
         </div>
       </div>
 
-      <div className="days-list">
-        {parsedData.days.map((day, dayIndex) => {
-          const participants = dayParticipants.find(d => d.date === day.date)?.participants || [];
-          const isExpanded = expandedDays.has(day.date);
+      <div className="info-box">
+        <p>
+          <strong>💡 Ordine Globale:</strong> L'ordine che definisci qui verrà usato per tutti i giorni del corso.
+          L'organizzatore non apparirà nella lista presenze dei documenti Word.
+        </p>
+      </div>
 
-          return (
-            <div key={day.date} className="day-card">
-              <div className="day-header" onClick={() => toggleDay(day.date)}>
-                <div className="day-header-left">
-                  {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
-                  <span className="day-date">{formatDate(day.date)}</span>
-                </div>
-                <div className="day-header-right">
-                  <span className="participant-count">
-                    {participants.length} partecipanti
-                  </span>
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div className="day-content">
-                  <div className="drag-hint">
-                    💡 Trascina per riordinare - l'ordine sarà usato nel documento Word
-                  </div>
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd(day.date)}
-                  >
-                    <SortableContext
-                      items={participants.map((_, index) => `participant-${index}`)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="participants-list">
-                        {participants.map((participant, index) => (
-                          <SortableParticipantItem
-                            key={`${participant}-${index}`}
-                            participant={participant}
-                            index={index}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                </div>
-              )}
+      <div className="participants-container">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={participants.map((_, index) => `participant-${index}`)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="participants-list">
+              {participants.map((participant, index) => (
+                <SortableParticipantItem
+                  key={participant.id}
+                  participant={participant}
+                  index={index}
+                  isOrganizer={index === organizerIndex}
+                  onSetOrganizer={() => handleSetOrganizer(index)}
+                />
+              ))}
             </div>
-          );
-        })}
+          </SortableContext>
+        </DndContext>
       </div>
 
       <div className="actions">
@@ -220,7 +215,7 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
         }
 
         .editor-header {
-          margin-bottom: 30px;
+          margin-bottom: 20px;
         }
 
         .header-content h2 {
@@ -251,80 +246,43 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
           font-size: 0.95rem;
         }
 
-        .days-list {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-          margin-bottom: 30px;
+        .info-box {
+          margin-bottom: 20px;
+          padding: 15px;
+          background: #e7f3ff;
+          border: 1px solid #b3d9ff;
+          border-radius: 8px;
         }
 
-        .day-card {
+        .info-box p {
+          margin: 0;
+          color: #004085;
+          font-size: 0.95rem;
+          line-height: 1.5;
+        }
+
+        .participants-container {
           background: white;
           border: 1px solid #dee2e6;
           border-radius: 8px;
-          overflow: hidden;
-        }
-
-        .day-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 15px 20px;
-          cursor: pointer;
-          background: #f8f9fa;
-          transition: background-color 0.2s;
-        }
-
-        .day-header:hover {
-          background: #e9ecef;
-        }
-
-        .day-header-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .day-date {
-          font-weight: 600;
-          color: #212529;
-          text-transform: capitalize;
-        }
-
-        .participant-count {
-          color: #6c757d;
-          font-size: 0.9rem;
-        }
-
-        .day-content {
           padding: 20px;
-          border-top: 1px solid #dee2e6;
-        }
-
-        .drag-hint {
-          margin-bottom: 15px;
-          padding: 12px;
-          background: #fff3cd;
-          border: 1px solid #ffc107;
-          border-radius: 6px;
-          font-size: 0.9rem;
-          color: #856404;
+          margin-bottom: 20px;
         }
 
         .participants-list {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 10px;
         }
 
         .sortable-participant-item {
           display: flex;
           align-items: center;
           gap: 12px;
-          padding: 12px;
+          padding: 15px;
           background: white;
-          border: 1px solid #dee2e6;
-          border-radius: 6px;
+          border: 2px solid #dee2e6;
+          border-radius: 8px;
           cursor: move;
           transition: all 0.2s;
         }
@@ -334,13 +292,18 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
           border-color: #007bff;
         }
 
+        .sortable-participant-item.is-organizer {
+          background: #fff3cd;
+          border-color: #ffc107;
+        }
+
         .drag-handle {
           display: flex;
           align-items: center;
           justify-content: center;
           color: #6c757d;
           cursor: grab;
-          font-size: 1.1rem;
+          font-size: 1.2rem;
         }
 
         .drag-handle:active {
@@ -351,19 +314,70 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
           display: flex;
           align-items: center;
           justify-content: center;
-          min-width: 32px;
-          height: 32px;
+          min-width: 36px;
+          height: 36px;
           background: #e3f2fd;
           color: #0277bd;
           border-radius: 50%;
-          font-weight: 600;
-          font-size: 0.85rem;
+          font-weight: 700;
+          font-size: 0.9rem;
+        }
+
+        .is-organizer .participant-number {
+          background: #ffc107;
+          color: #000;
         }
 
         .participant-name {
           flex: 1;
           color: #212529;
-          font-size: 0.95rem;
+          font-size: 1rem;
+          font-weight: 500;
+        }
+
+        .participant-info {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .participant-days {
+          font-size: 0.85rem;
+          color: #6c757d;
+          background: #f1f3f5;
+          padding: 4px 8px;
+          border-radius: 4px;
+        }
+
+        .btn-organizer {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          border: 2px solid #dee2e6;
+          border-radius: 6px;
+          background: white;
+          color: #6c757d;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.9rem;
+        }
+
+        .btn-organizer:hover {
+          border-color: #ffc107;
+          background: #fff9e6;
+          color: #ffc107;
+        }
+
+        .btn-organizer.active {
+          border-color: #ffc107;
+          background: #ffc107;
+          color: #000;
+        }
+
+        .organizer-label {
+          font-weight: 600;
+          font-size: 0.85rem;
         }
 
         .actions {
@@ -376,11 +390,11 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
         }
 
         .btn {
-          padding: 10px 20px;
+          padding: 12px 24px;
           border: none;
           border-radius: 6px;
           font-size: 1rem;
-          font-weight: 500;
+          font-weight: 600;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -396,7 +410,7 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
         .btn-primary:hover {
           background: #0056b3;
           transform: translateY(-1px);
-          box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+          box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
         }
 
         .btn-secondary {
@@ -422,12 +436,19 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
             gap: 10px;
           }
 
-          .day-header {
-            padding: 12px 15px;
+          .sortable-participant-item {
+            flex-wrap: wrap;
+            gap: 8px;
           }
 
-          .day-content {
-            padding: 15px;
+          .participant-info {
+            width: 100%;
+            order: 3;
+          }
+
+          .btn-organizer {
+            flex: 1;
+            justify-content: center;
           }
 
           .actions {

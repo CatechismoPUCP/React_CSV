@@ -66,6 +66,9 @@ const MAX_FILENAME_LENGTH = 50;
  * ```
  */
 export class FullCourseDocumentGenerator {
+  /** Current parsed data being processed (for participant ordering) */
+  private currentParsedData?: ParsedFullCourseData;
+
   // ============================================================================
   // BATCH DOCUMENT GENERATION
   // ============================================================================
@@ -94,34 +97,42 @@ export class FullCourseDocumentGenerator {
     templateFile: File,
     onProgress?: (current: number, total: number, date: string) => void
   ): Promise<BatchDocumentResult> {
+    // Store parsedData for participant ordering
+    this.currentParsedData = parsedData;
+
     const documents: DayDocumentResult[] = [];
     let totalGenerated = 0;
     let totalFailed = 0;
 
-    // Process each day
-    for (let i = 0; i < parsedData.days.length; i++) {
-      const day = parsedData.days[i];
-      const current = i + 1;
-      const total = parsedData.days.length;
+    try {
+      // Process each day
+      for (let i = 0; i < parsedData.days.length; i++) {
+        const day = parsedData.days[i];
+        const current = i + 1;
+        const total = parsedData.days.length;
 
-      onProgress?.(current, total, day.date);
+        onProgress?.(current, total, day.date);
 
-      const result = await this.processSingleDay(day, parsedData, templateFile);
-      documents.push(result);
+        const result = await this.processSingleDay(day, parsedData, templateFile);
+        documents.push(result);
 
-      if (result.success) {
-        totalGenerated++;
-      } else {
-        totalFailed++;
+        if (result.success) {
+          totalGenerated++;
+        } else {
+          totalFailed++;
+        }
       }
-    }
 
-    // Create ZIP if any documents were generated
-    if (totalGenerated > 0) {
-      return this.createSuccessfulBatchResult(documents, parsedData, totalGenerated, totalFailed);
-    }
+      // Create ZIP if any documents were generated
+      if (totalGenerated > 0) {
+        return this.createSuccessfulBatchResult(documents, parsedData, totalGenerated, totalFailed);
+      }
 
-    return this.createFailedBatchResult(documents, totalGenerated, totalFailed);
+      return this.createFailedBatchResult(documents, totalGenerated, totalFailed);
+    } finally {
+      // Clear parsedData after generation
+      this.currentParsedData = undefined;
+    }
   }
 
   /**
@@ -378,7 +389,7 @@ export class FullCourseDocumentGenerator {
     const morningParticipants: any[] = [];
     const afternoonParticipants: any[] = [];
 
-    for (const [name, sessions] of participantSessions) {
+    for (const sessions of participantSessions.values()) {
       for (const session of sessions) {
         const hour = session.joinTime.getHours();
         if (hour < AFTERNOON_START_HOUR) {
@@ -462,7 +473,8 @@ export class FullCourseDocumentGenerator {
     };
 
     // Add participants (up to MAX_PARTICIPANTS_IN_TEMPLATE)
-    this.addParticipantsToTemplate(templateData, lessonData.participants);
+    // Pass currentParsedData for participant ordering by masterOrder
+    this.addParticipantsToTemplate(templateData, lessonData.participants, this.currentParsedData);
 
     return templateData;
   }
@@ -473,14 +485,20 @@ export class FullCourseDocumentGenerator {
    * @private
    * @param templateData - Template data object to populate
    * @param participants - Array of participants
+   * @param parsedData - Full course data (for masterOrder lookup)
    */
   private addParticipantsToTemplate(
     templateData: WordTemplateData,
-    participants: ProcessedParticipant[]
+    participants: ProcessedParticipant[],
+    parsedData?: ParsedFullCourseData
   ): void {
-    const sortedParticipants = [...participants]
-      .filter(p => !p.isOrganizer)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    // Filter out organizer
+    const nonOrganizerParticipants = participants.filter(p => !p.isOrganizer);
+
+    // Sort by masterOrder if available, otherwise alphabetically
+    const sortedParticipants = parsedData
+      ? this.sortByMasterOrder(nonOrganizerParticipants, parsedData)
+      : [...nonOrganizerParticipants].sort((a, b) => a.name.localeCompare(b.name));
 
     for (let i = 0; i < MAX_PARTICIPANTS_IN_TEMPLATE; i++) {
       const index = i + 1;
@@ -492,6 +510,29 @@ export class FullCourseDocumentGenerator {
         this.addEmptyParticipantFields(templateData, index);
       }
     }
+  }
+
+  /**
+   * Sorts participants by their masterOrder from parsedData.
+   *
+   * @private
+   * @param participants - Participants to sort
+   * @param parsedData - Full course data with masterOrder info
+   * @returns Sorted participants
+   */
+  private sortByMasterOrder(
+    participants: ProcessedParticipant[],
+    parsedData: ParsedFullCourseData
+  ): ProcessedParticipant[] {
+    return [...participants].sort((a, b) => {
+      const aInfo = this.findParticipantByName(a.name, parsedData.allParticipants);
+      const bInfo = this.findParticipantByName(b.name, parsedData.allParticipants);
+
+      const aOrder = aInfo?.masterOrder ?? 9999;
+      const bOrder = bInfo?.masterOrder ?? 9999;
+
+      return aOrder - bOrder;
+    });
   }
 
   /**
@@ -508,12 +549,13 @@ export class FullCourseDocumentGenerator {
     index: number
   ): void {
     const data = templateData as any;
-    data[`partecipante${index}`] = participant.name;
-    data[`ingresso${index}m`] = this.formatTime(participant.morningFirstJoin);
-    data[`uscita${index}m`] = this.formatTime(participant.morningLastLeave);
-    data[`ingresso${index}p`] = this.formatTime(participant.afternoonFirstJoin);
-    data[`uscita${index}p`] = this.formatTime(participant.afternoonLastLeave);
-    data[`assente${index}`] = participant.isPresent ? '' : 'X';
+    // Use same placeholder names as single-day mode
+    data[`nome${index}`] = participant.name;
+    data[`MattOraIn${index}`] = this.formatTime(participant.morningFirstJoin);
+    data[`MattOraOut${index}`] = this.formatTime(participant.morningLastLeave);
+    data[`PomeOraIn${index}`] = this.formatTime(participant.afternoonFirstJoin);
+    data[`PomeOraOut${index}`] = this.formatTime(participant.afternoonLastLeave);
+    data[`presenza${index}`] = participant.isPresent ? '' : 'X';
   }
 
   /**
@@ -525,12 +567,13 @@ export class FullCourseDocumentGenerator {
    */
   private addEmptyParticipantFields(templateData: WordTemplateData, index: number): void {
     const data = templateData as any;
-    data[`partecipante${index}`] = '';
-    data[`ingresso${index}m`] = '';
-    data[`uscita${index}m`] = '';
-    data[`ingresso${index}p`] = '';
-    data[`uscita${index}p`] = '';
-    data[`assente${index}`] = '';
+    // Use same placeholder names as single-day mode
+    data[`nome${index}`] = '';
+    data[`MattOraIn${index}`] = '';
+    data[`MattOraOut${index}`] = '';
+    data[`PomeOraIn${index}`] = '';
+    data[`PomeOraOut${index}`] = '';
+    data[`presenza${index}`] = '';
   }
 
   // ============================================================================
