@@ -176,6 +176,7 @@ function App() {
           <AppHeader />
           <main className="app-main">
             <BatchCourseMode
+              templateFile={currentTemplateFile}
               onComplete={handleBackToMenu}
               onCancel={handleBackToMenu}
             />

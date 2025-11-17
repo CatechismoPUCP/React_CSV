@@ -4,6 +4,7 @@ import { batchCSVProcessor } from '../../services/batchCSVProcessor';
 import { BatchCSVFile, DayCSVPair, CompleteBatchResult } from '../../types/course';
 
 interface BatchCourseModeProps {
+  templateFile: File | null;
   onComplete?: () => void;
   onCancel?: () => void;
 }
@@ -11,6 +12,7 @@ interface BatchCourseModeProps {
 type Step = 'upload' | 'review' | 'processing' | 'completed';
 
 export const BatchCourseMode: React.FC<BatchCourseModeProps> = ({
+  templateFile,
   onComplete,
   onCancel,
 }) => {
@@ -18,7 +20,6 @@ export const BatchCourseMode: React.FC<BatchCourseModeProps> = ({
   const [uploadedFiles, setUploadedFiles] = useState<BatchCSVFile[]>([]);
   const [dayPairs, setDayPairs] = useState<DayCSVPair[]>([]);
   const [courseName, setCourseName] = useState('');
-  const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0, currentDate: '' });
   const [result, setResult] = useState<CompleteBatchResult | null>(null);
@@ -47,17 +48,13 @@ export const BatchCourseMode: React.FC<BatchCourseModeProps> = ({
     }
   };
 
-  const handleTemplateSelected = (file: File | null) => {
-    setTemplateFile(file);
-  };
-
   const handleProceedToReview = () => {
     if (!courseName.trim()) {
       setError('Inserisci il nome del corso');
       return;
     }
     if (!templateFile) {
-      setError('Seleziona un file template');
+      setError('Seleziona un file template dal menu principale (Modalità Giorno Singolo)');
       return;
     }
     if (dayPairs.length === 0) {
@@ -103,7 +100,6 @@ export const BatchCourseMode: React.FC<BatchCourseModeProps> = ({
     setUploadedFiles([]);
     setDayPairs([]);
     setCourseName('');
-    setTemplateFile(null);
     setResult(null);
     setError('');
   };
@@ -136,21 +132,27 @@ export const BatchCourseMode: React.FC<BatchCourseModeProps> = ({
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="template">Template Word *</label>
-            <input
-              id="template"
-              type="file"
-              accept=".docx"
-              onChange={(e) => handleTemplateSelected(e.target.files?.[0] || null)}
-              className="form-input"
-            />
-            {templateFile && (
-              <div className="file-selected">
-                <FiFile /> {templateFile.name}
+          {templateFile ? (
+            <div className="template-info">
+              <FiCheckCircle style={{ color: '#28a745' }} />
+              <div>
+                <strong>Template Word:</strong> {templateFile.name}
+                <p className="hint" style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#6c757d' }}>
+                  (Usa lo stesso template del Giorno Singolo)
+                </p>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="template-warning">
+              <FiAlertCircle style={{ color: '#ffc107' }} />
+              <div>
+                <strong>Nessun template caricato</strong>
+                <p className="hint" style={{ margin: '4px 0 0 0', fontSize: '0.85rem' }}>
+                  Carica prima un template dalla modalità "Giorno Singolo"
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="csvFiles">File CSV (Mattine e Pomeriggi) *</label>
@@ -567,6 +569,35 @@ const batchStyles = `
     display: inline-flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .template-info {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .template-warning {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .template-info strong,
+  .template-warning strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #212529;
   }
 
   .analyzing-status {
