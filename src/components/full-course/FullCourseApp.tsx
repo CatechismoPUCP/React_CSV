@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { CourseSetup } from './CourseSetup/CourseSetup';
-import { CourseDashboard } from './CourseDashboard/CourseDashboard';
 import { FullCourseCSVUpload } from './FullCourseUpload/FullCourseCSVUpload';
 import { AliasManager } from './AliasManager/AliasManager';
-import { CourseData, ParsedFullCourseData, BatchDocumentResult } from '../../types/course';
-import { useCourseState } from '../../hooks/useCourseState';
+import { FullCourseParticipantEditor } from './FullCourseParticipantEditor';
+import { ParsedFullCourseData, BatchDocumentResult } from '../../types/course';
 import { fullCourseDocumentGenerator } from '../../services/fullCourseDocumentGenerator';
 import { FiArrowLeft, FiLoader, FiCheckCircle, FiAlertCircle, FiDownload } from 'react-icons/fi';
 
@@ -13,30 +11,15 @@ interface FullCourseAppProps {
   onBackToMenu: () => void;
 }
 
-type CourseAppStep = 'course-list' | 'csv-upload' | 'alias-management' | 'course-setup' | 'document-generation' | 'course-dashboard';
+type CourseAppStep = 'csv-upload' | 'alias-management' | 'participant-editor' | 'document-generation';
 
 export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBackToMenu }) => {
-  const [currentStep, setCurrentStep] = useState<CourseAppStep>('course-list');
+  const [currentStep, setCurrentStep] = useState<CourseAppStep>('csv-upload');
   const [parsedCSVData, setParsedCSVData] = useState<ParsedFullCourseData | null>(null);
-  const [createdCourse, setCreatedCourse] = useState<CourseData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateProgress, setGenerateProgress] = useState({ current: 0, total: 0, date: '' });
   const [generateResult, setGenerateResult] = useState<BatchDocumentResult | null>(null);
   const [generateError, setGenerateError] = useState('');
-
-  const {
-    courses,
-    currentCourse,
-    isLoading,
-    error,
-    loadCourses,
-    setCurrentCourse,
-    clearError
-  } = useCourseState();
-
-  useEffect(() => {
-    loadCourses();
-  }, [loadCourses]);
 
   const handleGenerateDocuments = useCallback(async () => {
     if (!templateFile || !parsedCSVData) {
@@ -84,156 +67,64 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
     }
   };
 
-  const handleCourseSelect = async (courseId: string) => {
-    await setCurrentCourse(courseId);
-    setCurrentStep('course-dashboard');
-  };
-
-  const handleNewCourse = () => {
-    // Start with CSV upload for full course
-    setCurrentStep('csv-upload');
-  };
-
   const handleCSVParsed = (data: ParsedFullCourseData) => {
     setParsedCSVData(data);
-    // Go to alias management if there are suggestions, otherwise skip to setup
+    // Go to alias management if there are suggestions, otherwise skip to participant editor
     if (data.aliasSuggestions.length > 0) {
       setCurrentStep('alias-management');
     } else {
-      setCurrentStep('course-setup');
+      setCurrentStep('participant-editor');
     }
   };
 
   const handleAliasManagementComplete = (updatedData: ParsedFullCourseData) => {
     setParsedCSVData(updatedData);
-    setCurrentStep('course-setup');
+    setCurrentStep('participant-editor');
   };
 
   const handleAliasManagementBack = () => {
     setCurrentStep('csv-upload');
   };
 
-  const handleCourseSetupComplete = (courseData: CourseData) => {
-    setCreatedCourse(courseData);
-    // If we have parsed CSV data (new course from CSV), go to document generation
-    if (parsedCSVData) {
-      setCurrentStep('document-generation');
+  const handleParticipantEditorComplete = (updatedData: ParsedFullCourseData) => {
+    setParsedCSVData(updatedData);
+    setCurrentStep('document-generation');
+  };
+
+  const handleParticipantEditorBack = () => {
+    // Go back to alias management if there were suggestions, otherwise to CSV upload
+    if (parsedCSVData && parsedCSVData.aliasSuggestions.length > 0) {
+      setCurrentStep('alias-management');
     } else {
-      // Otherwise go to dashboard (editing existing course)
-      setCurrentStep('course-dashboard');
+      setCurrentStep('csv-upload');
     }
   };
 
   const handleDocumentGenerationComplete = () => {
-    setCurrentStep('course-dashboard');
+    // Reset and go back to menu after successful generation
+    onBackToMenu();
   };
 
-  const handleBackToCourseList = () => {
-    setCurrentStep('course-list');
-    setCurrentCourse(null);
+  const handleBackToStart = () => {
+    setCurrentStep('csv-upload');
     setParsedCSVData(null);
+    setGenerateResult(null);
+    setGenerateError('');
   };
-
-  const handleEditCourse = () => {
-    setCurrentStep('course-setup');
-  };
-
-  if (isLoading && courses.length === 0) {
-    return (
-      <div className="loading-container">
-        <FiLoader className="spinner" />
-        <p>Caricamento corsi...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="full-course-app">
-      {error && (
-        <div className="error-banner">
-          <p>{error}</p>
-          <button onClick={clearError} className="btn-close">×</button>
-        </div>
-      )}
-
-      {currentStep === 'course-list' && (
-        <div className="course-list-view">
-          <div className="course-list-header">
-            <button onClick={onBackToMenu} className="btn btn-back">
-              <FiArrowLeft /> Torna al Menu
-            </button>
-            <h1>I Miei Corsi</h1>
-            <button onClick={handleNewCourse} className="btn btn-primary">
-              Nuovo Corso
-            </button>
-          </div>
-
-          {courses.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">📚</div>
-              <h2>Nessun corso ancora</h2>
-              <p>Crea il tuo primo corso per iniziare a gestire lezioni multi-giorno</p>
-              <button onClick={handleNewCourse} className="btn btn-primary btn-large">
-                Crea Primo Corso
-              </button>
-            </div>
-          ) : (
-            <div className="courses-grid">
-              {courses.map((course) => (
-                <div 
-                  key={course.courseId} 
-                  className="course-card"
-                  onClick={() => handleCourseSelect(course.courseId)}
-                >
-                  <div className="course-header">
-                    <h3>{course.courseInfo.name}</h3>
-                    <div className="course-status">
-                      {course.metadata.completedLessons}/{course.metadata.totalLessons} lezioni
-                    </div>
-                  </div>
-                  
-                  <div className="course-info">
-                    <div className="course-dates">
-                      {course.courseInfo.startDate} - {course.courseInfo.endDate}
-                    </div>
-                    <div className="course-participants">
-                      {course.participants.filter(p => p.isActive).length} partecipanti
-                    </div>
-                  </div>
-
-                  <div className="course-progress">
-                    <div className="progress-bar">
-                      <div 
-                        className="progress-fill"
-                        style={{ 
-                          width: `${(course.metadata.completedLessons / course.metadata.totalLessons) * 100}%` 
-                        }}
-                      ></div>
-                    </div>
-                    <span className="progress-text">
-                      {Math.round((course.metadata.completedLessons / course.metadata.totalLessons) * 100)}% completato
-                    </span>
-                  </div>
-
-                  <div className="course-meta">
-                    <div className="course-instructor">
-                      Docente: {course.courseInfo.instructor.name}
-                    </div>
-                    <div className="course-updated">
-                      Aggiornato: {new Date(course.metadata.updatedAt).toLocaleDateString('it-IT')}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <div className="full-course-header">
+        <button onClick={onBackToMenu} className="btn btn-back">
+          <FiArrowLeft /> Torna al Menu
+        </button>
+        <h1>Modalità Corso Completo</h1>
+      </div>
 
       {currentStep === 'csv-upload' && (
         <FullCourseCSVUpload
           onParsed={handleCSVParsed}
-          onCancel={handleBackToCourseList}
+          onCancel={onBackToMenu}
         />
       )}
 
@@ -245,11 +136,11 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
         />
       )}
 
-      {currentStep === 'course-setup' && (
-        <CourseSetup
-          onComplete={handleCourseSetupComplete}
-          onCancel={handleBackToCourseList}
-          initialData={currentCourse || undefined}
+      {currentStep === 'participant-editor' && parsedCSVData && (
+        <FullCourseParticipantEditor
+          parsedData={parsedCSVData}
+          onComplete={handleParticipantEditorComplete}
+          onBack={handleParticipantEditorBack}
         />
       )}
 
@@ -261,7 +152,7 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
                 <FiAlertCircle size={48} color="#ffc107" />
                 <h2>Template Mancante</h2>
                 <p>Carica prima un template dalla modalità "Giorno Singolo"</p>
-                <button onClick={handleBackToCourseList} className="btn btn-secondary">
+                <button onClick={handleBackToStart} className="btn btn-secondary">
                   <FiArrowLeft /> Indietro
                 </button>
               </div>
@@ -310,26 +201,12 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
                 <FiAlertCircle size={48} color="#dc3545" />
                 <h2>Errore</h2>
                 <p>{generateError}</p>
-                <button onClick={handleBackToCourseList} className="btn btn-secondary">
+                <button onClick={handleBackToStart} className="btn btn-secondary">
                   <FiArrowLeft /> Indietro
                 </button>
               </div>
             ) : null}
           </div>
-        </div>
-      )}
-
-      {currentStep === 'course-dashboard' && currentCourse && (
-        <div className="course-dashboard-view">
-          <div className="dashboard-header">
-            <button onClick={handleBackToCourseList} className="btn btn-back">
-              <FiArrowLeft /> Tutti i Corsi
-            </button>
-          </div>
-          <CourseDashboard
-            course={currentCourse}
-            onEditCourse={handleEditCourse}
-          />
         </div>
       )}
 
@@ -339,13 +216,19 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
           background: #f8f9fa;
         }
 
-        .loading-container {
+        .full-course-header {
           display: flex;
-          flex-direction: column;
           align-items: center;
-          justify-content: center;
-          height: 50vh;
-          color: #6c757d;
+          gap: 20px;
+          padding: 20px;
+          background: white;
+          border-bottom: 1px solid #e9ecef;
+        }
+
+        .full-course-header h1 {
+          margin: 0;
+          color: #212529;
+          font-size: 1.8rem;
         }
 
         .spinner {
@@ -357,192 +240,6 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
-        }
-
-        .error-banner {
-          background: #f8d7da;
-          color: #721c24;
-          padding: 12px 20px;
-          margin: 20px;
-          border-radius: 6px;
-          border: 1px solid #f5c6cb;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .error-banner p {
-          margin: 0;
-        }
-
-        .btn-close {
-          background: none;
-          border: none;
-          color: #721c24;
-          font-size: 1.2rem;
-          cursor: pointer;
-          padding: 0;
-          width: 20px;
-          height: 20px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .course-list-view {
-          padding: 20px;
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .course-list-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 30px;
-          padding-bottom: 20px;
-          border-bottom: 1px solid #e9ecef;
-        }
-
-        .course-list-header h1 {
-          margin: 0;
-          color: #212529;
-          font-size: 1.8rem;
-        }
-
-        .empty-state {
-          text-align: center;
-          padding: 60px 20px;
-          background: white;
-          border-radius: 12px;
-          border: 1px solid #e9ecef;
-        }
-
-        .empty-icon {
-          font-size: 4rem;
-          margin-bottom: 20px;
-        }
-
-        .empty-state h2 {
-          margin: 0 0 10px 0;
-          color: #212529;
-          font-size: 1.5rem;
-        }
-
-        .empty-state p {
-          margin: 0 0 30px 0;
-          color: #6c757d;
-          font-size: 1.1rem;
-        }
-
-        .courses-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-          gap: 20px;
-        }
-
-        .course-card {
-          background: white;
-          border: 1px solid #e9ecef;
-          border-radius: 12px;
-          padding: 20px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .course-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          border-color: #007bff;
-        }
-
-        .course-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 15px;
-        }
-
-        .course-header h3 {
-          margin: 0;
-          color: #212529;
-          font-size: 1.2rem;
-          font-weight: 600;
-          flex: 1;
-          margin-right: 10px;
-        }
-
-        .course-status {
-          background: #e3f2fd;
-          color: #0277bd;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 0.8rem;
-          font-weight: 500;
-        }
-
-        .course-info {
-          margin-bottom: 15px;
-        }
-
-        .course-dates {
-          color: #495057;
-          font-size: 0.9rem;
-          margin-bottom: 5px;
-        }
-
-        .course-participants {
-          color: #6c757d;
-          font-size: 0.9rem;
-        }
-
-        .course-progress {
-          margin-bottom: 15px;
-        }
-
-        .progress-bar {
-          width: 100%;
-          height: 6px;
-          background: #e9ecef;
-          border-radius: 3px;
-          overflow: hidden;
-          margin-bottom: 5px;
-        }
-
-        .progress-fill {
-          height: 100%;
-          background: linear-gradient(90deg, #007bff, #28a745);
-          transition: width 0.3s ease;
-        }
-
-        .progress-text {
-          font-size: 0.8rem;
-          color: #6c757d;
-        }
-
-        .course-meta {
-          border-top: 1px solid #f1f3f4;
-          padding-top: 15px;
-        }
-
-        .course-instructor {
-          font-size: 0.9rem;
-          color: #495057;
-          margin-bottom: 5px;
-        }
-
-        .course-updated {
-          font-size: 0.8rem;
-          color: #6c757d;
-        }
-
-        .course-dashboard-view {
-          background: white;
-        }
-
-        .dashboard-header {
-          padding: 20px;
-          border-bottom: 1px solid #e9ecef;
         }
 
         .btn {

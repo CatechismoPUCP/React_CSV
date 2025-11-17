@@ -342,6 +342,7 @@ export interface FullCourseDayData {
   endTime: Date;
   sessions: FullCourseSessionData[];
   participantNames: Set<string>; // unique names for this day
+  participantOrder?: string[]; // optional custom order for participants in Word template
 }
 
 /**
