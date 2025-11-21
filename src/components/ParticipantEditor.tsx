@@ -30,11 +30,13 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
   const {
     mergeMode,
     selectedForMerge,
+    selectedSources,
     togglePresence,
     removeParticipant,
     toggleMergeMode,
     cancelMerge,
     handleMergeSelection,
+    confirmMerge,
   } = useParticipantManagement(participants, onParticipantsChange);
 
   // Drag and drop sensors
@@ -106,6 +108,8 @@ export const ParticipantEditor: React.FC<ParticipantEditorProps> = ({
           participantCount={participants.length}
           onToggleMergeMode={toggleMergeMode}
           onCancelMerge={cancelMerge}
+          onConfirmMerge={confirmMerge}
+          canConfirm={Boolean(selectedForMerge !== null && selectedSources.size >= 1)}
         />
 
         <div className="view-controls">

@@ -8,23 +8,14 @@ import {
 // CONSTANTS
 // ============================================================================
 
-/** Similarity threshold for automatic alias merging (85%+ match) */
-const HIGH_CONFIDENCE_THRESHOLD = 0.85;
+const HIGH_CONFIDENCE_THRESHOLD = 0.80;
+const MEDIUM_CONFIDENCE_THRESHOLD = 0.65;
+const LOW_CONFIDENCE_THRESHOLD = 0.55;
 
-/** Similarity threshold for suggesting manual review (70-84% match) */
-const MEDIUM_CONFIDENCE_THRESHOLD = 0.70;
-
-/** Minimum similarity threshold to consider as potential alias (60%+) */
-const LOW_CONFIDENCE_THRESHOLD = 0.60;
-
-/** Weight for containment score in similarity calculation */
 const CONTAINMENT_WEIGHT = 0.4;
-
-/** Weight for Levenshtein distance in similarity calculation */
 const LEVENSHTEIN_WEIGHT = 0.3;
-
-/** Weight for token-based similarity in similarity calculation */
 const TOKEN_WEIGHT = 0.3;
+const ABBREVIATION_BOOST_MAX = 0.15;
 
 /** Minimum token length to consider in token matching */
 const MIN_TOKEN_LENGTH = 1;
@@ -242,7 +233,8 @@ export class AliasManagementService {
    */
   applyAliasMappings(
     participants: FullCourseParticipantInfo[],
-    suggestions: AliasSuggestion[]
+    suggestions: AliasSuggestion[],
+    options?: { forceMergeAll?: boolean }
   ): {
     mergedParticipants: FullCourseParticipantInfo[];
     mappings: AliasMapping[];
@@ -251,10 +243,11 @@ export class AliasManagementService {
     const participantMap = this.initializeParticipantMap(participants);
 
     // Apply auto-merged suggestions
+    const force = options?.forceMergeAll === true;
     for (const suggestion of suggestions) {
-      if (!suggestion.autoMerged) continue;
+      if (!force && !suggestion.autoMerged) continue;
 
-      const mapping = this.mergeSuggestion(participantMap, suggestion);
+      const mapping = this.mergeSuggestion(participantMap, suggestion, force);
       if (mapping) {
         mappings.push(mapping);
       }
@@ -290,7 +283,8 @@ export class AliasManagementService {
    */
   private mergeSuggestion(
     participantMap: Map<string, FullCourseParticipantInfo>,
-    suggestion: AliasSuggestion
+    suggestion: AliasSuggestion,
+    force: boolean
   ): AliasMapping | null {
     const mainParticipant = participantMap.get(suggestion.participantId);
     if (!mainParticipant) return null;
@@ -302,8 +296,7 @@ export class AliasManagementService {
     for (let i = 0; i < suggestion.suggestedAliases.length; i++) {
       const aliasName = suggestion.suggestedAliases[i];
       const similarity = suggestion.similarityScores[i];
-
-      if (similarity < HIGH_CONFIDENCE_THRESHOLD) continue;
+      if (similarity < HIGH_CONFIDENCE_THRESHOLD && !force) continue;
 
       this.mergeAliasIntoMain(
         participantMap,
@@ -322,7 +315,7 @@ export class AliasManagementService {
       participantId: mainParticipant.id,
       primaryName: mainParticipant.primaryName,
       mergedNames,
-      mergedBy: 'auto',
+      mergedBy: force ? 'manual' : 'auto',
       confidence: suggestion.confidence,
     };
   }
@@ -426,12 +419,45 @@ export class AliasManagementService {
     const tokenScore = this.calculateTokenSimilarity(normalized1, normalized2);
 
     // Weighted average
-    const similarity =
+    let similarity =
       containmentScore * CONTAINMENT_WEIGHT +
       levenshteinScore * LEVENSHTEIN_WEIGHT +
       tokenScore * TOKEN_WEIGHT;
 
+    const abbrBoost = this.calculateAbbreviationBoost(normalized1, normalized2);
+    similarity = Math.min(1, similarity + abbrBoost);
+
     return similarity;
+  }
+
+  private calculateAbbreviationBoost(n1: string, n2: string): number {
+    const t1 = this.extractTokens(n1);
+    const t2 = this.extractTokens(n2);
+
+    let boost = 0;
+    for (const tok1 of t1) {
+      if (tok1.length === 1) {
+        const match = Array.from(t2).some(tok2 => tok2.startsWith(tok1));
+        if (match) boost += 0.05;
+      } else if (tok1.length === 2 && tok1.endsWith('s')) {
+        const base = tok1[0];
+        const match = Array.from(t2).some(tok2 => tok2.startsWith(base));
+        if (match) boost += 0.05;
+      }
+    }
+
+    for (const tok2 of t2) {
+      if (tok2.length === 1) {
+        const match = Array.from(t1).some(tok1 => tok1.startsWith(tok2));
+        if (match) boost += 0.05;
+      } else if (tok2.length === 2 && tok2.endsWith('s')) {
+        const base = tok2[0];
+        const match = Array.from(t1).some(tok1 => tok1.startsWith(base));
+        if (match) boost += 0.05;
+      }
+    }
+
+    return Math.min(ABBREVIATION_BOOST_MAX, boost);
   }
 
   // ============================================================================

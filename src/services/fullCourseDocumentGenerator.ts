@@ -320,11 +320,28 @@ export class FullCourseDocumentGenerator {
       lessonType
     );
 
+    const participantNamesPresent = new Set(participants.map(p => p.name));
+    const fixedAbsents = parsedData.allParticipants
+      .filter(p => !p.isOrganizer)
+      .filter(p => !participantNamesPresent.has(p.primaryName))
+      .map<ProcessedParticipant>(p => ({
+        name: p.primaryName,
+        email: p.email,
+        totalAbsenceMinutes: 999,
+        isPresent: false,
+        isAbsent: true,
+        allConnections: { morning: [], afternoon: [] },
+        sessions: { morning: [], afternoon: [] },
+      }));
+
+    const mergedParticipants = this.sortByMasterOrder([...participants, ...fixedAbsents], parsedData)
+      .slice(0, MAX_PARTICIPANTS_IN_TEMPLATE);
+
     return {
       date: new Date(day.date),
       subject: day.courseName,
       courseId: parsedData.zoomMeetingId,
-      participants,
+      participants: mergedParticipants,
       organizer: organizer || undefined,
       lessonType,
       lessonHours,

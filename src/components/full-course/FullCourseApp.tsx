@@ -20,6 +20,10 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
   const [generateProgress, setGenerateProgress] = useState({ current: 0, total: 0, date: '' });
   const [generateResult, setGenerateResult] = useState<BatchDocumentResult | null>(null);
   const [generateError, setGenerateError] = useState('');
+  const [showAddAbsentModal, setShowAddAbsentModal] = useState(false);
+  const [absentName, setAbsentName] = useState('');
+  const [absentEmail, setAbsentEmail] = useState('');
+  const [participantLimitError, setParticipantLimitError] = useState('');
 
   const handleGenerateDocuments = useCallback(async () => {
     if (!templateFile || !parsedCSVData) {
@@ -112,6 +116,50 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
     setGenerateError('');
   };
 
+  const openAliasManager = () => {
+    if (!parsedCSVData) return;
+    setCurrentStep('alias-management');
+  };
+
+  const openAddAbsentModal = () => {
+    setShowAddAbsentModal(true);
+    setAbsentName('');
+    setAbsentEmail('');
+  };
+
+  const addFixedAbsent = () => {
+    if (!parsedCSVData) return;
+    const name = absentName.trim();
+    const email = absentEmail.trim();
+    if (!name) return;
+    const newParticipant = {
+      id: `manual_${name.toLowerCase().replace(/\s+/g,'_')}_${Date.now()}`,
+      primaryName: name,
+      aliases: [name],
+      email,
+      isOrganizer: false,
+      masterOrder: parsedCSVData.allParticipants.length + 1,
+      daysPresent: [],
+    };
+    const prospectiveList = [...parsedCSVData.allParticipants, newParticipant];
+    const nonOrganizerCount = prospectiveList.filter(p => !p.isOrganizer).length;
+    if (nonOrganizerCount > 5) {
+      setParticipantLimitError('Limite massimo di 5 partecipanti (escluso l\'organizzatore)');
+      return;
+    }
+    const updated: ParsedFullCourseData = {
+      ...parsedCSVData,
+      allParticipants: prospectiveList,
+      statistics: {
+        ...parsedCSVData.statistics,
+        totalParticipants: parsedCSVData.statistics.totalParticipants + 1,
+      },
+    };
+    setParsedCSVData(updated);
+    setShowAddAbsentModal(false);
+    setParticipantLimitError('');
+  };
+
   return (
     <div className="full-course-app">
       <div className="full-course-header">
@@ -119,12 +167,26 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
           <FiArrowLeft /> Torna al Menu
         </button>
         <h1>Modalità Corso Completo</h1>
+        {parsedCSVData && (
+          <div className="actions-bar">
+            {currentStep !== 'participant-editor' && (
+              <button className="btn btn-secondary" onClick={openAliasManager}>Gestisci Alias</button>
+            )}
+            <button className="btn btn-primary" onClick={openAddAbsentModal}>Aggiungi Assente Fisso</button>
+          </div>
+        )}
       </div>
+      {participantLimitError && (
+        <div className="limit-error-banner">
+          <FiAlertCircle /> {participantLimitError}
+        </div>
+      )}
 
       {currentStep === 'csv-upload' && (
         <FullCourseCSVUpload
           onParsed={handleCSVParsed}
           onCancel={onBackToMenu}
+          autoProceed
         />
       )}
 
@@ -210,6 +272,34 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
         </div>
       )}
 
+      {showAddAbsentModal && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h3>Aggiungi Assente Fisso</h3>
+            <div className="modal-row">
+              <input
+                type="text"
+                placeholder="Nome"
+                value={absentName}
+                onChange={(e) => setAbsentName(e.target.value)}
+              />
+            </div>
+            <div className="modal-row">
+              <input
+                type="email"
+                placeholder="Email (opzionale)"
+                value={absentEmail}
+                onChange={(e) => setAbsentEmail(e.target.value)}
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowAddAbsentModal(false)}>Annulla</button>
+              <button className="btn btn-primary" onClick={addFixedAbsent} disabled={!absentName.trim()}>Aggiungi</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .full-course-app {
           min-height: 100vh;
@@ -236,6 +326,44 @@ export const FullCourseApp: React.FC<FullCourseAppProps> = ({ templateFile, onBa
           animation: spin 1s linear infinite;
           margin-bottom: 15px;
         }
+
+        .actions-bar {
+          margin-left: auto;
+          display: flex;
+          gap: 10px;
+        }
+
+        .limit-error-banner {
+          margin: 0 20px 10px 20px;
+          padding: 10px 12px;
+          background: #f8d7da;
+          color: #721c24;
+          border: 1px solid #f5c6cb;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .modal-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .modal {
+          background: white;
+          border-radius: 8px;
+          padding: 20px;
+          width: 420px;
+          max-width: 90vw;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .modal-row { margin: 10px 0; }
+        .modal-row input { width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
 
         @keyframes spin {
           from { transform: rotate(0deg); }
