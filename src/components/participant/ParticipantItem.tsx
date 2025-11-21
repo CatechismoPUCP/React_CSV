@@ -1,7 +1,8 @@
 import React from 'react';
 import { ProcessedParticipant, LessonType } from '../../types';
-import { FiClock, FiCheckCircle, FiXCircle, FiTrash2, FiArrowUp, FiArrowDown, FiUserCheck } from 'react-icons/fi';
-import { MdDragIndicator } from 'react-icons/md';
+import { FiClock, FiCheckCircle, FiXCircle, FiTrash2, FiUserCheck, FiMove } from 'react-icons/fi';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface ParticipantItemProps {
   participant: ProcessedParticipant;
@@ -10,12 +11,11 @@ interface ParticipantItemProps {
   lessonType: LessonType;
   onTogglePresence: (index: number) => void;
   onRemove: (index: number) => void;
-  onMoveUp: (index: number) => void;
-  onMoveDown: (index: number) => void;
   onMergeWith: (index: number) => void;
   mergeMode: boolean;
   selectedForMerge: number | null;
   onSetOrganizer: (index: number) => void;
+  isDragEnabled?: boolean;
 }
 
 export const ParticipantItem: React.FC<ParticipantItemProps> = ({
@@ -25,18 +25,38 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
   lessonType,
   onTogglePresence,
   onRemove,
-  onMoveUp,
-  onMoveDown,
   onMergeWith,
   mergeMode,
   selectedForMerge,
   onSetOrganizer,
+  isDragEnabled = true,
 }) => {
+  // Create a unique ID for drag and drop
+  const itemId = `participant-${index}`;
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: itemId,
+    disabled: !isDragEnabled || mergeMode, // Disable drag during merge mode
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   const formatTime = (date?: Date) => {
     if (!date) return '--:--';
-    return date.toLocaleTimeString('it-IT', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return date.toLocaleTimeString('it-IT', {
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
@@ -79,20 +99,29 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
   };
 
   return (
-    <div 
-      className={`participant-item ${isMergeTarget ? 'merge-target' : ''} ${isMergeCandidate ? 'merge-candidate' : ''} ${isMergeSource ? 'merge-source' : ''}`}
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`participant-item ${isMergeTarget ? 'merge-target' : ''} ${isMergeCandidate ? 'merge-candidate' : ''} ${isMergeSource ? 'merge-source' : ''} ${isDragging ? 'is-dragging' : ''}`}
       onClick={handleItemClick}
-      style={{ cursor: (isMergeCandidate || isMergeSource) ? 'pointer' : 'default' }}
     >
       <div className="participant-header">
         <div className="participant-info">
-          <MdDragIndicator className="drag-handle" />
+          <div
+            className={`drag-handle ${!isDragEnabled || mergeMode ? 'drag-disabled' : ''}`}
+            {...attributes}
+            {...listeners}
+            title={mergeMode ? 'Drag disabilitato durante merge' : 'Trascina per riordinare'}
+          >
+            <FiMove />
+          </div>
+          <span className="participant-order-badge">#{index + 1}</span>
           <span className="participant-name">{participant.name}</span>
           {participant.isOrganizer && (
             <span className="organizer-badge">Organizzatore</span>
           )}
         </div>
-        
+
         <div className="participant-actions">
           {!participant.isOrganizer && (
             <button
@@ -118,31 +147,7 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
             {participant.isPresent ? <FiCheckCircle /> : <FiXCircle />}
             {participant.isPresent ? 'Presente' : 'Assente'}
           </button>
-          
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveUp(index);
-            }}
-            disabled={index === 0}
-            className="move-btn"
-            title="Sposta su"
-          >
-            <FiArrowUp />
-          </button>
-          
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoveDown(index);
-            }}
-            disabled={index === totalCount - 1}
-            className="move-btn"
-            title="Sposta giù"
-          >
-            <FiArrowDown />
-          </button>
-          
+
           <button
             onClick={(e) => {
               e.stopPropagation();

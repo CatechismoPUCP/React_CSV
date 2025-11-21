@@ -225,6 +225,25 @@ const calculateSessionAbsences = (
   const sortedSessions = [...sessions].sort((a, b) => a.joinTime.getTime() - b.joinTime.getTime());
   
   let totalAbsence = 0;
+
+  // Calculate absence before first join and after last leave relative to lesson hours
+  const first = sortedSessions[0];
+  const last = sortedSessions[sortedSessions.length - 1];
+
+  const sessionDate = new Date(first.joinTime);
+  const scheduledStart = new Date(sessionDate);
+  scheduledStart.setHours(startHour, 0, 0, 0);
+
+  const scheduledEnd = new Date(sessionDate);
+  scheduledEnd.setHours(endHour, 0, 0, 0);
+
+  if (first.joinTime.getTime() > scheduledStart.getTime()) {
+    totalAbsence += Math.max(0, (first.joinTime.getTime() - scheduledStart.getTime()) / (1000 * 60));
+  }
+
+  if (last.leaveTime.getTime() < scheduledEnd.getTime()) {
+    totalAbsence += Math.max(0, (scheduledEnd.getTime() - last.leaveTime.getTime()) / (1000 * 60));
+  }
   
   for (let i = 0; i < sortedSessions.length - 1; i++) {
     const currentLeave = sortedSessions[i].leaveTime;

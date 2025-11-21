@@ -7,6 +7,8 @@ interface MergeControlsProps {
   participantCount: number;
   onToggleMergeMode: () => void;
   onCancelMerge: () => void;
+  canConfirm?: boolean;
+  onConfirmMerge?: () => void;
 }
 
 export const MergeControls: React.FC<MergeControlsProps> = ({
@@ -15,6 +17,8 @@ export const MergeControls: React.FC<MergeControlsProps> = ({
   participantCount,
   onToggleMergeMode,
   onCancelMerge,
+  canConfirm = false,
+  onConfirmMerge,
 }) => {
   return (
     <div className="merge-controls">
@@ -34,9 +38,19 @@ export const MergeControls: React.FC<MergeControlsProps> = ({
             {selectedForMerge === null ? (
               <span>Seleziona il partecipante principale (destinazione)</span>
             ) : (
-              <span>Ora clicca su un altro partecipante per unirlo</span>
+              <span>Seleziona altri partecipanti da unire e conferma</span>
             )}
           </div>
+          {onConfirmMerge && (
+            <button
+              onClick={onConfirmMerge}
+              className="confirm-merge-btn"
+              title="Conferma unione"
+              disabled={!canConfirm}
+            >
+              Conferma Unione
+            </button>
+          )}
           <button
             onClick={onCancelMerge}
             className="cancel-merge-btn"

@@ -4,6 +4,7 @@ import { UploadSection, EditSection, SuccessSection } from './components/section
 import { ErrorMessage, AppHeader } from './components/common';
 import { MainMenu, AppMode } from './components/MainMenu';
 import { FullCourseApp } from './components/full-course/FullCourseApp';
+import { BatchCourseMode } from './components/upload/BatchCourseMode';
 import {
   useAppState,
   useErrorHandler,
@@ -170,8 +171,24 @@ function App() {
         </>
       )}
 
+      {currentMode === 'batch-course' && (
+        <>
+          <AppHeader />
+          <main className="app-main">
+            <BatchCourseMode
+              templateFile={currentTemplateFile}
+              onComplete={handleBackToMenu}
+              onCancel={handleBackToMenu}
+            />
+          </main>
+        </>
+      )}
+
       {currentMode === 'full-course' && (
-        <FullCourseApp onBackToMenu={handleBackToMenu} />
+        <FullCourseApp
+          templateFile={currentTemplateFile}
+          onBackToMenu={handleBackToMenu}
+        />
       )}
 
       <style>{`
