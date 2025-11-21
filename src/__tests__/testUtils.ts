@@ -72,3 +72,10 @@ Value4,Value5,Value6`
 
   return testData[filename];
 };
+
+// Minimal noop test to satisfy Jest when loading this file under __tests__
+describe('testUtils', () => {
+  it('provides CSV fixtures', () => {
+    expect(typeof getTestCSV('morning-valid.csv')).toBe('string');
+  });
+});

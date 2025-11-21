@@ -537,8 +537,8 @@ export class AliasManagementService {
    * @returns Token containment score
    */
   private calculateTokenContainment(name1: string, name2: string): number {
-    const tokens1 = name1.split(/\s+/).filter(t => t.length > MIN_TOKEN_LENGTH);
-    const tokens2 = name2.split(/\s+/).filter(t => t.length > MIN_TOKEN_LENGTH);
+    const tokens1 = name1.split(/\s+/).filter(t => t.length >= MIN_TOKEN_LENGTH);
+    const tokens2 = name2.split(/\s+/).filter(t => t.length >= MIN_TOKEN_LENGTH);
 
     let matches = 0;
     for (const token1 of tokens1) {
@@ -700,7 +700,7 @@ export class AliasManagementService {
    * @returns Set of tokens (filtered for minimum length)
    */
   private extractTokens(name: string): Set<string> {
-    return new Set(name.split(/\s+/).filter(t => t.length > MIN_TOKEN_LENGTH));
+    return new Set(name.split(/\s+/).filter(t => t.length >= MIN_TOKEN_LENGTH));
   }
 
   // ============================================================================
