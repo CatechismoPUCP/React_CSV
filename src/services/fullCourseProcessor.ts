@@ -76,6 +76,11 @@ export class FullCourseProcessor {
     // Step 4: Update final data
     this.updateParsedData(parsedData, aliasSuggestions);
 
+    const hasParticipants = parsedData.allParticipants.some(p => !p.isOrganizer);
+    if (!hasParticipants) {
+      throw new Error('Nessun partecipante trovato nel file CSV');
+    }
+
     return parsedData;
   }
 

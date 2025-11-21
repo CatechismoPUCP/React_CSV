@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ParsedFullCourseData } from '../../../types/course';
 import { fullCourseProcessor } from '../../../services/fullCourseProcessor';
 import { FiUpload, FiCheckCircle, FiAlertCircle, FiLoader, FiUsers, FiCalendar } from 'react-icons/fi';
@@ -6,6 +6,7 @@ import { FiUpload, FiCheckCircle, FiAlertCircle, FiLoader, FiUsers, FiCalendar }
 interface FullCourseCSVUploadProps {
   onParsed: (data: ParsedFullCourseData) => void;
   onCancel?: () => void;
+  autoProceed?: boolean;
 }
 
 type ProcessingStatus = 'idle' | 'uploading' | 'parsing' | 'completed' | 'error';
@@ -13,6 +14,7 @@ type ProcessingStatus = 'idle' | 'uploading' | 'parsing' | 'completed' | 'error'
 export const FullCourseCSVUpload: React.FC<FullCourseCSVUploadProps> = ({
   onParsed,
   onCancel,
+  autoProceed = true,
 }) => {
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const [parsedData, setParsedData] = useState<ParsedFullCourseData | null>(null);
@@ -41,6 +43,10 @@ export const FullCourseCSVUpload: React.FC<FullCourseCSVUploadProps> = ({
 
       setParsedData(data);
       setStatus('completed');
+
+      if (autoProceed) {
+        onParsed(data);
+      }
 
       // Show warnings if any
       if (validation.warnings.length > 0) {

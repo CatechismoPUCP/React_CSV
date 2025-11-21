@@ -25,6 +25,10 @@ export const AliasManager: React.FC<AliasManagerProps> = ({
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [mergeDecisions, setMergeDecisions] = useState<Map<number, boolean>>(new Map());
   const [customMerges, setCustomMerges] = useState<Map<string, string[]>>(new Map());
+  const [manualSelected, setManualSelected] = useState<Set<number>>(new Set());
+  const [manualMain, setManualMain] = useState<string>('');
+  const [manualAlias, setManualAlias] = useState<string>('');
+  const [customSuggestions, setCustomSuggestions] = useState<AliasSuggestion[]>([]);
   const [showHelp, setShowHelp] = useState(false);
 
   // Extract data from parsedData
@@ -60,16 +64,19 @@ export const AliasManager: React.FC<AliasManagerProps> = ({
       mergeDecisions.get(idx) === true
     );
 
+    const selectedManual = manualSuggestions.filter((_, idx) => manualSelected.has(idx));
+
     const { mergedParticipants } = aliasManagementService.applyAliasMappings(
       participants,
-      acceptedSuggestions
+      [...acceptedSuggestions, ...selectedManual, ...customSuggestions],
+      { forceMergeAll: true }
     );
 
     // Return updated parsed data with merged participants
     const updatedData: ParsedFullCourseData = {
       ...parsedData,
       allParticipants: mergedParticipants,
-      aliasSuggestions: acceptedSuggestions // Only keep accepted suggestions
+      aliasSuggestions: [...acceptedSuggestions, ...selectedManual, ...customSuggestions]
     };
 
     onComplete(updatedData);
@@ -292,11 +299,69 @@ export const AliasManager: React.FC<AliasManagerProps> = ({
                     {(suggestion.confidence * 100).toFixed(0)}% match
                   </span>
                 </div>
-                <button className="btn btn-sm btn-primary">
-                  Unisci Manualmente
+                <button
+                  className={`btn btn-sm ${manualSelected.has(idx) ? 'btn-success' : 'btn-primary'}`}
+                  onClick={() => {
+                    setManualSelected(prev => {
+                      const next = new Set(prev);
+                      if (next.has(idx)) next.delete(idx); else next.add(idx);
+                      return next;
+                    });
+                  }}
+                >
+                  {manualSelected.has(idx) ? 'Selezionato' : 'Unisci Manualmente'}
                 </button>
               </div>
             ))}
+
+            <div className="custom-merge">
+              <h3>Merge Personalizzato</h3>
+              <div className="custom-row">
+                <select value={manualMain} onChange={e => setManualMain(e.target.value)}>
+                  <option value="">Seleziona nome principale</option>
+                  {participants.map(p => (
+                    <option key={p.id} value={p.primaryName}>{p.primaryName}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="custom-row">
+                <select value={manualAlias} onChange={e => setManualAlias(e.target.value)}>
+                  <option value="">Seleziona alias da unire</option>
+                  {participants.map(p => (
+                    <option key={`a-${p.id}`} value={p.primaryName}>{p.primaryName}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="custom-actions">
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    if (!manualMain || !manualAlias || manualMain === manualAlias) return;
+                    const main = participants.find(p => p.primaryName === manualMain);
+                    if (!main) return;
+                    const suggestion: AliasSuggestion = {
+                      participantId: main.id,
+                      mainName: manualMain,
+                      suggestedAliases: [manualAlias],
+                      similarityScores: [1],
+                      autoMerged: false,
+                      confidence: 1,
+                    };
+                    setCustomSuggestions(prev => [...prev, suggestion]);
+                    setManualAlias('');
+                  }}
+                >Aggiungi Merge</button>
+              </div>
+              {customSuggestions.length > 0 && (
+                <div className="custom-list">
+                  {customSuggestions.map((s, i) => (
+                    <div key={`c-${i}`} className="summary-merge">
+                      <span className="merge-text"><strong>{s.mainName}</strong> ← {s.suggestedAliases.join(', ')}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="manual-actions">
               <button onClick={onBack} className="btn btn-secondary">
@@ -320,7 +385,9 @@ export const AliasManager: React.FC<AliasManagerProps> = ({
   // CONFIRMATION STEP
   if (currentStep === 'confirmation') {
     const acceptedCount = Array.from(mergeDecisions.values()).filter(v => v).length;
+    const manualCount = manualSelected.size;
     const rejectedCount = Array.from(mergeDecisions.values()).filter(v => !v).length;
+    const pendingAutoCount = autoMergeSuggestions.filter((_, idx) => !mergeDecisions.has(idx)).length;
 
     return (
       <div className="alias-manager">
@@ -360,12 +427,48 @@ export const AliasManager: React.FC<AliasManagerProps> = ({
               </div>
             )}
 
+            {manualCount > 0 && (
+              <div className="merge-summary">
+                <h4>Merge manuali selezionati:</h4>
+                {manualSuggestions
+                  .map((suggestion, idx) => ({ suggestion, idx }))
+                  .filter(({ idx }) => manualSelected.has(idx))
+                  .map(({ suggestion, idx }) => (
+                    <div key={`m-${idx}`} className="summary-merge">
+                      <FiCheck color="#28a745" />
+                      <span className="merge-text">
+                        <strong>{suggestion.mainName}</strong> ← {suggestion.suggestedAliases.join(', ')}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {customSuggestions.length > 0 && (
+              <div className="merge-summary">
+                <h4>Merge personalizzati:</h4>
+                {customSuggestions.map((suggestion, idx) => (
+                  <div key={`cm-${idx}`} className="summary-merge">
+                    <FiCheck color="#28a745" />
+                    <span className="merge-text">
+                      <strong>{suggestion.mainName}</strong> ← {suggestion.suggestedAliases.join(', ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="warning-box">
               <FiAlertCircle />
               <p>
                 <strong>Attenzione:</strong> Una volta confermato, le modifiche non potranno
                 essere annullate. Assicurati che i merge siano corretti.
               </p>
+              {pendingAutoCount > 0 && (
+                <p>
+                  Devi rivedere tutti i merge automatici: {pendingAutoCount} ancora in sospeso.
+                </p>
+              )}
             </div>
 
             <div className="confirmation-actions">
@@ -379,6 +482,7 @@ export const AliasManager: React.FC<AliasManagerProps> = ({
               <button
                 onClick={handleComplete}
                 className="btn btn-success btn-large"
+                disabled={pendingAutoCount > 0}
               >
                 <FiCheck /> Conferma e Continua
               </button>

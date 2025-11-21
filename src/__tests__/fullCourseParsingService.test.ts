@@ -32,7 +32,7 @@ describe('FullCourseParsingService', () => {
       const parsed = fullCourseParsingService.parseFullCourseCSV(csv);
 
       for (let i = 0; i < parsed.days.length - 1; i++) {
-        expect(parsed.days[i].date).toBeLessThanOrEqual(parsed.days[i + 1].date);
+        expect(parsed.days[i].date.localeCompare(parsed.days[i + 1].date)).toBeLessThanOrEqual(0);
       }
     });
 

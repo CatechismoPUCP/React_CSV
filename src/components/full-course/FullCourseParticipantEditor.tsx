@@ -3,7 +3,8 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ParsedFullCourseData, FullCourseParticipantInfo } from '../../types/course';
+import { ParsedFullCourseData, FullCourseParticipantInfo, AliasSuggestion } from '../../types/course';
+import { aliasManagementService } from '../../services/aliasManagementService';
 import { FiMove, FiUsers, FiCalendar, FiCheck, FiStar } from 'react-icons/fi';
 
 interface FullCourseParticipantEditorProps {
@@ -17,6 +18,11 @@ interface SortableParticipantItemProps {
   index: number;
   isOrganizer: boolean;
   onSetOrganizer: () => void;
+  onSplit: () => void;
+  mergeMode?: boolean;
+  isSelected?: boolean;
+  isMain?: boolean;
+  onSelectForMerge?: () => void;
 }
 
 const SortableParticipantItem: React.FC<SortableParticipantItemProps> = ({
@@ -24,6 +30,11 @@ const SortableParticipantItem: React.FC<SortableParticipantItemProps> = ({
   index,
   isOrganizer,
   onSetOrganizer,
+  onSplit,
+  mergeMode = false,
+  isSelected = false,
+  isMain = false,
+  onSelectForMerge,
 }) => {
   const {
     attributes,
@@ -34,6 +45,7 @@ const SortableParticipantItem: React.FC<SortableParticipantItemProps> = ({
     isDragging,
   } = useSortable({
     id: `participant-${index}`,
+    disabled: mergeMode,
   });
 
   const style = {
@@ -46,9 +58,10 @@ const SortableParticipantItem: React.FC<SortableParticipantItemProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`sortable-participant-item ${isOrganizer ? 'is-organizer' : ''}`}
+      className={`sortable-participant-item ${isOrganizer ? 'is-organizer' : ''} ${mergeMode ? 'merge-mode' : ''} ${isSelected ? 'is-selected' : ''} ${isMain ? 'is-main' : ''}`}
+      onClick={mergeMode ? onSelectForMerge : undefined}
     >
-      <div className="drag-handle" {...attributes} {...listeners}>
+      <div className={`drag-handle ${mergeMode ? 'drag-disabled' : ''}`} {...attributes} {...listeners}>
         <FiMove />
       </div>
       <span className="participant-number">#{index + 1}</span>
@@ -62,10 +75,21 @@ const SortableParticipantItem: React.FC<SortableParticipantItemProps> = ({
         onClick={onSetOrganizer}
         className={`btn-organizer ${isOrganizer ? 'active' : ''}`}
         title={isOrganizer ? 'Organizzatore' : 'Imposta come organizzatore'}
+        disabled={mergeMode}
       >
         <FiStar />
         {isOrganizer && <span className="organizer-label">Organizzatore</span>}
       </button>
+      {participant.aliases.length > 1 && (
+        <button
+          onClick={onSplit}
+          className="btn-split"
+          title="Dividi alias in partecipanti separati"
+          disabled={mergeMode}
+        >
+          Split
+        </button>
+      )}
     </div>
   );
 };
@@ -93,6 +117,17 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  const [newAbsentName, setNewAbsentName] = useState('');
+  const [newAbsentEmail, setNewAbsentEmail] = useState('');
+  const [limitError, setLimitError] = useState('');
+  const [aliasSuggestions, setAliasSuggestions] = useState<AliasSuggestion[]>([]);
+  const [showAliasPanel, setShowAliasPanel] = useState(false);
+  const [selectedAliasIndices, setSelectedAliasIndices] = useState<Set<number>>(new Set());
+  const [customSuggestions, setCustomSuggestions] = useState<AliasSuggestion[]>([]);
+  const [mergeMode, setMergeMode] = useState(false);
+  const [selectedForMerge, setSelectedForMerge] = useState<Set<string>>(new Set());
+  const [mergeMainId, setMergeMainId] = useState<string | null>(null);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -125,6 +160,159 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
     setParticipants(updated);
   };
 
+  const handleSplitParticipant = (index: number) => {
+    const target = participants[index];
+    const aliasesToSplit = target.aliases.filter(a => a !== target.primaryName);
+    if (aliasesToSplit.length === 0) return;
+
+    const newEntries: FullCourseParticipantInfo[] = aliasesToSplit.map((alias, i) => ({
+      id: `${target.id}_split_${i}_${Date.now()}`,
+      primaryName: alias,
+      aliases: [alias],
+      email: target.email,
+      isOrganizer: false,
+      masterOrder: (participants[index].masterOrder || index) + i + 1,
+      daysPresent: [...target.daysPresent],
+    }));
+
+    const updatedTarget: FullCourseParticipantInfo = {
+      ...target,
+      aliases: [target.primaryName],
+    };
+
+    const updatedList = [
+      ...participants.slice(0, index),
+      updatedTarget,
+      ...newEntries,
+      ...participants.slice(index + 1),
+    ];
+
+    setParticipants(updatedList);
+  };
+
+  const addFixedAbsent = () => {
+    const name = newAbsentName.trim();
+    const email = newAbsentEmail.trim();
+    if (!name) return;
+    const newEntry: FullCourseParticipantInfo = {
+      id: `manual_${name.toLowerCase().replace(/\s+/g,'_')}_${Date.now()}`,
+      primaryName: name,
+      aliases: [name],
+      email,
+      isOrganizer: false,
+      masterOrder: participants.length + 1,
+      daysPresent: [],
+    };
+    const prospective = [...participants, newEntry];
+    const nonOrganizerCount = prospective.filter(p => !p.isOrganizer).length;
+    if (nonOrganizerCount > 5) {
+      setLimitError('Limite massimo di 5 partecipanti (escluso l\'organizzatore)');
+      return;
+    }
+    setParticipants(prospective);
+    setNewAbsentName('');
+    setNewAbsentEmail('');
+    setLimitError('');
+  };
+
+  const detectAliasesInline = () => {
+    const suggestions = aliasManagementService.detectAliases(participants);
+    setAliasSuggestions(suggestions);
+    setSelectedAliasIndices(new Set());
+    setShowAliasPanel(true);
+  };
+
+  const toggleAliasSelection = (idx: number) => {
+    setSelectedAliasIndices(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
+  const applySelectedAliasMerges = () => {
+    const selected = aliasSuggestions.filter((_, idx) => selectedAliasIndices.has(idx));
+    if (selected.length === 0 && customSuggestions.length === 0) return;
+    const { mergedParticipants } = aliasManagementService.applyAliasMappings(participants, [...selected, ...customSuggestions]);
+    const sorted = [...mergedParticipants].sort((a, b) => (a.masterOrder || 0) - (b.masterOrder || 0));
+    setParticipants(sorted);
+    const newOrganizerIndex = sorted.findIndex(p => p.isOrganizer);
+    setOrganizerIndex(newOrganizerIndex);
+    setAliasSuggestions([]);
+    setSelectedAliasIndices(new Set());
+    setCustomSuggestions([]);
+    setShowAliasPanel(false);
+  };
+
+  const autoMergeHighConfidence = () => {
+    if (aliasSuggestions.length === 0) return;
+    const high = aliasSuggestions.filter(s => s.autoMerged);
+    if (high.length === 0) return;
+    const { mergedParticipants } = aliasManagementService.applyAliasMappings(participants, high);
+    const sorted = [...mergedParticipants].sort((a, b) => (a.masterOrder || 0) - (b.masterOrder || 0));
+    setParticipants(sorted);
+    const newOrganizerIndex = sorted.findIndex(p => p.isOrganizer);
+    setOrganizerIndex(newOrganizerIndex);
+    const remaining = aliasSuggestions.filter(s => !s.autoMerged);
+    setAliasSuggestions(remaining);
+    setSelectedAliasIndices(new Set());
+  };
+
+  
+
+  const toggleMergeMode = () => {
+    setMergeMode(prev => !prev);
+    setSelectedForMerge(new Set());
+    setMergeMainId(null);
+  };
+
+  const toggleSelectForMerge = (index: number) => {
+    if (!mergeMode) return;
+    const id = participants[index].id;
+    setSelectedForMerge(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        if (mergeMainId === id) setMergeMainId(null);
+      } else {
+        next.add(id);
+        if (!mergeMainId) setMergeMainId(id);
+      }
+      return next;
+    });
+  };
+
+  const setMainFromSelection = (id: string) => {
+    if (selectedForMerge.has(id)) {
+      setMergeMainId(id);
+    }
+  };
+
+  const confirmMergeSelection = () => {
+    if (!mergeMode || selectedForMerge.size < 2 || !mergeMainId) return;
+    const main = participants.find(p => p.id === mergeMainId);
+    if (!main) return;
+    const aliases = participants
+      .filter(p => selectedForMerge.has(p.id) && p.id !== mergeMainId)
+      .map(p => p.primaryName);
+    const suggestion: AliasSuggestion = {
+      participantId: main.id,
+      mainName: main.primaryName,
+      suggestedAliases: aliases,
+      similarityScores: aliases.map(() => 1),
+      autoMerged: false,
+      confidence: 1,
+    };
+    const { mergedParticipants } = aliasManagementService.applyAliasMappings(participants, [suggestion]);
+    const sorted = [...mergedParticipants].sort((a, b) => (a.masterOrder || 0) - (b.masterOrder || 0));
+    setParticipants(sorted);
+    const newOrganizerIndex = sorted.findIndex(p => p.isOrganizer);
+    setOrganizerIndex(newOrganizerIndex);
+    setMergeMode(false);
+    setSelectedForMerge(new Set());
+    setMergeMainId(null);
+  };
+
   const handleComplete = () => {
     // Create updated data with participant order and organizer info
     const updatedParticipants = participants.map((p, idx) => ({
@@ -132,6 +320,12 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
       masterOrder: idx,
       isOrganizer: idx === organizerIndex,
     }));
+
+    const nonOrganizerCount = updatedParticipants.filter(p => !p.isOrganizer).length;
+    if (nonOrganizerCount > 5) {
+      setLimitError('Limite massimo di 5 partecipanti (escluso l\'organizzatore)');
+      return;
+    }
 
     const updatedData: ParsedFullCourseData = {
       ...parsedData,
@@ -164,6 +358,25 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
             <span>{parsedData.statistics.totalParticipants} partecipanti</span>
           </div>
         </div>
+        <div className="alias-actions">
+          <button className="btn btn-secondary" onClick={detectAliasesInline}>Trova Alias</button>
+          <button className="btn btn-primary" onClick={applySelectedAliasMerges} disabled={((aliasSuggestions.length === 0 && customSuggestions.length === 0) || (selectedAliasIndices.size === 0 && customSuggestions.length === 0))}>Applica Selezionati</button>
+          <button className="btn btn-secondary" onClick={autoMergeHighConfidence} disabled={aliasSuggestions.filter(s => s.autoMerged).length === 0}>Auto-merge Sicuri</button>
+          <button className={`btn ${mergeMode ? 'btn-secondary' : 'btn-primary'}`} onClick={toggleMergeMode}>{mergeMode ? 'Annulla Merge Alias' : 'Merge Alias'}</button>
+          {mergeMode && (
+            <div className="merge-toolbar">
+              <span>Seleziona partecipanti da unire</span>
+              <select value={mergeMainId ?? ''} onChange={e => setMainFromSelection(e.target.value)}>
+                <option value="">Nome finale</option>
+                {[...selectedForMerge].map(id => {
+                  const p = participants.find(pp => pp.id === id);
+                  return p ? <option key={`main-${id}`} value={id}>{p.primaryName}</option> : null;
+                })}
+              </select>
+              <button className="btn btn-primary" onClick={confirmMergeSelection} disabled={!mergeMainId || selectedForMerge.size < 2}>Conferma Unione</button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="info-box">
@@ -174,6 +387,51 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
       </div>
 
       <div className="participants-container">
+        {limitError && (
+          <div className="limit-error-box">{limitError}</div>
+        )}
+        {showAliasPanel && (
+          <div className="alias-panel">
+            <h3>Suggerimenti Alias</h3>
+            {aliasSuggestions.length === 0 && customSuggestions.length === 0 ? (
+              <div className="alias-empty">Nessun suggerimento al momento</div>
+            ) : (
+              <div className="alias-list">
+                {aliasSuggestions.map((s, idx) => (
+                  <div key={`s-${idx}`} className={`alias-item ${s.autoMerged ? 'high' : s.confidence >= 0.7 ? 'medium' : 'low'}`}>
+                    <label className="alias-select">
+                      <input type="checkbox" checked={selectedAliasIndices.has(idx)} onChange={() => toggleAliasSelection(idx)} />
+                      <span className="alias-text"><strong>{s.mainName}</strong> ← {s.suggestedAliases.join(', ')}</span>
+                    </label>
+                    <span className="alias-confidence">{Math.round(s.confidence * 100)}%</span>
+                  </div>
+                ))}
+                {customSuggestions.map((s, idx) => (
+                  <div key={`c-${idx}`} className="alias-item custom">
+                    <span className="alias-text"><strong>{s.mainName}</strong> ← {s.suggestedAliases.join(', ')}</span>
+                    <span className="alias-badge">Manuale</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+          </div>
+        )}
+        <div className="add-absent-fixed">
+          <input
+            type="text"
+            placeholder="Nome assente fisso"
+            value={newAbsentName}
+            onChange={e => setNewAbsentName(e.target.value)}
+          />
+          <input
+            type="email"
+            placeholder="Email (opzionale)"
+            value={newAbsentEmail}
+            onChange={e => setNewAbsentEmail(e.target.value)}
+          />
+          <button className="btn btn-primary" onClick={addFixedAbsent} disabled={!newAbsentName.trim()}>Aggiungi Assente Fisso</button>
+        </div>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -185,14 +443,19 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
           >
             <div className="participants-list">
               {participants.map((participant, index) => (
-                <SortableParticipantItem
-                  key={participant.id}
-                  participant={participant}
-                  index={index}
-                  isOrganizer={index === organizerIndex}
-                  onSetOrganizer={() => handleSetOrganizer(index)}
-                />
-              ))}
+              <SortableParticipantItem
+                key={participant.id}
+                participant={participant}
+                index={index}
+                isOrganizer={index === organizerIndex}
+                onSetOrganizer={() => handleSetOrganizer(index)}
+                onSplit={() => handleSplitParticipant(index)}
+                mergeMode={mergeMode}
+                isSelected={mergeMode && selectedForMerge.has(participant.id)}
+                isMain={mergeMode && mergeMainId === participant.id}
+                onSelectForMerge={() => toggleSelectForMerge(index)}
+              />
+            ))}
             </div>
           </SortableContext>
         </DndContext>
@@ -202,7 +465,7 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
         <button onClick={onBack} className="btn btn-secondary">
           Indietro
         </button>
-        <button onClick={handleComplete} className="btn btn-primary">
+        <button onClick={handleComplete} className="btn btn-primary" disabled={participants.filter(p => !p.isOrganizer).length > 5}>
           <FiCheck /> Genera Documenti
         </button>
       </div>
@@ -267,6 +530,69 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
           border-radius: 8px;
           padding: 20px;
           margin-bottom: 20px;
+        }
+
+        .alias-actions {
+          display: flex;
+          gap: 10px;
+          margin-top: 10px;
+        }
+
+        .alias-panel {
+          border: 1px solid #dee2e6;
+          border-radius: 8px;
+          padding: 12px;
+          margin-bottom: 15px;
+          background: #f8f9fa;
+        }
+
+        .alias-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 10px;
+        }
+
+        .alias-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 10px;
+          border: 1px solid #dee2e6;
+          border-radius: 6px;
+          background: white;
+        }
+
+        .alias-item.high { border-color: #28a745; }
+        .alias-item.medium { border-color: #ffc107; }
+        .alias-item.low { border-color: #dc3545; }
+        .alias-item.custom { border-color: #007bff; }
+
+        .alias-select {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .alias-text { color: #212529; }
+        .alias-confidence { font-size: 0.85rem; color: #6c757d; }
+        .alias-badge { font-size: 0.8rem; color: #007bff; }
+
+        .alias-manual {
+          display: grid;
+          grid-template-columns: 1fr 1fr auto;
+          gap: 8px;
+          margin-top: 12px;
+        }
+
+        .limit-error-box {
+          margin-bottom: 10px;
+          padding: 10px 12px;
+          background: #f8d7da;
+          color: #721c24;
+          border: 1px solid #f5c6cb;
+          border-radius: 6px;
+          font-size: 0.95rem;
         }
 
         .participants-list {
@@ -375,6 +701,55 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
           color: #000;
         }
 
+        .btn-split {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          border: 2px solid #dee2e6;
+          border-radius: 6px;
+          background: white;
+          color: #6c757d;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.9rem;
+        }
+
+        .btn-split:hover {
+          border-color: #007bff;
+          background: #f0f8ff;
+          color: #007bff;
+        }
+
+        .add-absent-fixed {
+          display: grid;
+          grid-template-columns: 1fr 1fr auto;
+          gap: 10px;
+          margin-bottom: 15px;
+        }
+        .add-absent-fixed input {
+          padding: 8px;
+          border: 1px solid #dee2e6;
+          border-radius: 6px;
+        }
+
+        .btn-split {
+          padding: 8px 12px;
+          border: 2px solid #dee2e6;
+          border-radius: 6px;
+          background: white;
+          color: #6c757d;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.9rem;
+        }
+
+        .btn-split:hover {
+          border-color: #007bff;
+          background: #f0f8ff;
+          color: #007bff;
+        }
+
         .organizer-label {
           font-weight: 600;
           font-size: 0.85rem;
@@ -459,6 +834,17 @@ export const FullCourseParticipantEditor: React.FC<FullCourseParticipantEditorPr
             width: 100%;
             justify-content: center;
           }
+        }
+
+        .sortable-participant-item.merge-mode { cursor: pointer; }
+        .sortable-participant-item.is-selected { border-color: #007bff; background: #f0f8ff; }
+        .sortable-participant-item.is-main { border-color: #28a745; background: #e6ffed; }
+        .drag-disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .merge-toolbar {
+          display: flex;
+          align-items: center;
+          gap: 10px;
         }
       `}</style>
     </div>

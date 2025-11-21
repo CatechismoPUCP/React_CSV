@@ -8,6 +8,7 @@ export const useParticipantManagement = (
 ) => {
   const [mergeMode, setMergeMode] = useState(false);
   const [selectedForMerge, setSelectedForMerge] = useState<number | null>(null);
+  const [selectedSources, setSelectedSources] = useState<Set<number>>(new Set());
 
   const togglePresence = useCallback((index: number) => {
     const updatedParticipants = [...initialParticipants];
@@ -43,54 +44,56 @@ export const useParticipantManagement = (
   const toggleMergeMode = useCallback(() => {
     setMergeMode(!mergeMode);
     setSelectedForMerge(null);
+    setSelectedSources(new Set());
   }, [mergeMode]);
 
   const cancelMerge = useCallback(() => {
     setMergeMode(false);
     setSelectedForMerge(null);
+    setSelectedSources(new Set());
   }, []);
 
-  const mergeParticipants = useCallback((targetIndex: number, sourceIndex: number) => {
-    if (targetIndex === sourceIndex) return;
+  const confirmMerge = useCallback(() => {
+    if (selectedForMerge === null || selectedSources.size === 0) return;
 
-    const updated = [...initialParticipants];
-    const target = updated[targetIndex];
-    const source = updated[sourceIndex];
+    let updated = [...initialParticipants];
+    let anchorIndex = selectedForMerge;
 
-    // Merge using centralized, order-independent logic
-    const mergedParticipant: ProcessedParticipant = ParticipantService.mergeParticipants(target, source);
-
-    // Update the target and remove the source
-    updated[targetIndex] = mergedParticipant;
-    updated.splice(sourceIndex, 1);
+    const sourcesSorted = Array.from(selectedSources).filter(i => i !== anchorIndex).sort((a, b) => a - b);
+    for (const sourceIndex of sourcesSorted) {
+      if (sourceIndex === anchorIndex) continue;
+      const target = updated[anchorIndex];
+      const source = updated[sourceIndex];
+      const mergedParticipant: ProcessedParticipant = ParticipantService.mergeParticipants(target, source);
+      updated[anchorIndex] = mergedParticipant;
+      updated.splice(sourceIndex, 1);
+      if (sourceIndex < anchorIndex) anchorIndex -= 1;
+    }
 
     onParticipantsChange(updated);
-
-    // Keep merge mode active for multi-merge; maintain selection on the (possibly shifted) target index
-    setMergeMode(true);
-    setSelectedForMerge(prev => {
-      if (prev === null) return null;
-      let newTargetIndex = targetIndex;
-      if (sourceIndex < targetIndex) newTargetIndex = targetIndex - 1;
-      return newTargetIndex;
-    });
-  }, [initialParticipants, onParticipantsChange]);
+    setMergeMode(false);
+    setSelectedForMerge(null);
+    setSelectedSources(new Set());
+  }, [initialParticipants, onParticipantsChange, selectedForMerge, selectedSources]);
 
   const handleMergeSelection = useCallback((clickedIndex: number) => {
     if (!mergeMode) return;
 
     if (selectedForMerge === null) {
-      // First click: select the anchor participant (no hierarchy in result)
       setSelectedForMerge(clickedIndex);
     } else {
-      // Second and subsequent clicks: merge the clicked participant into the selected anchor
-      mergeParticipants(selectedForMerge, clickedIndex);
+      setSelectedSources(prev => {
+        const next = new Set(prev);
+        if (next.has(clickedIndex)) next.delete(clickedIndex); else next.add(clickedIndex);
+        return next;
+      });
     }
-  }, [mergeMode, selectedForMerge, mergeParticipants]);
+  }, [mergeMode, selectedForMerge]);
 
   return {
     mergeMode,
     selectedForMerge,
+    selectedSources,
     togglePresence,
     removeParticipant,
     moveUp,
@@ -98,5 +101,6 @@ export const useParticipantManagement = (
     toggleMergeMode,
     cancelMerge,
     handleMergeSelection,
+    confirmMerge,
   };
 };
