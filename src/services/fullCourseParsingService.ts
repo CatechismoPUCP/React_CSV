@@ -571,6 +571,10 @@ export class FullCourseParsingService {
       const hour24 = this.parseTimePart(timePart, ampm);
       const { minute, second } = this.parseMinutesAndSeconds(timePart);
 
+      if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
+        throw new Error('Invalid date components');
+      }
+
       return new Date(year, month - 1, day, hour24, minute, second);
     } catch (error) {
       console.error('Error parsing date:', dateTimeStr, error);

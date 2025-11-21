@@ -22,6 +22,11 @@ export class LessonService {
           for (let h = Math.max(LESSON_HOURS.MORNING.START, startHour); h <= Math.min(LESSON_HOURS.MORNING.END, endHour); h++) {
             hours.add(h);
           }
+          if (lessonType === 'both' && endHour >= LESSON_HOURS.AFTERNOON.START) {
+            for (let h = LESSON_HOURS.AFTERNOON.START; h <= Math.min(LESSON_HOURS.AFTERNOON.END, endHour); h++) {
+              hours.add(h);
+            }
+          }
         });
       }
       

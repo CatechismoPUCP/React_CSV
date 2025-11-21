@@ -15,7 +15,7 @@ const LOW_CONFIDENCE_THRESHOLD = 0.55;
 const CONTAINMENT_WEIGHT = 0.4;
 const LEVENSHTEIN_WEIGHT = 0.3;
 const TOKEN_WEIGHT = 0.3;
-const ABBREVIATION_BOOST_MAX = 0.15;
+const ABBREVIATION_BOOST_MAX = 0.20;
 
 /** Minimum token length to consider in token matching */
 const MIN_TOKEN_LENGTH = 1;
@@ -438,22 +438,22 @@ export class AliasManagementService {
     for (const tok1 of t1) {
       if (tok1.length === 1) {
         const match = Array.from(t2).some(tok2 => tok2.startsWith(tok1));
-        if (match) boost += 0.05;
+        if (match) boost += 0.10;
       } else if (tok1.length === 2 && tok1.endsWith('s')) {
         const base = tok1[0];
         const match = Array.from(t2).some(tok2 => tok2.startsWith(base));
-        if (match) boost += 0.05;
+        if (match) boost += 0.08;
       }
     }
 
     for (const tok2 of t2) {
       if (tok2.length === 1) {
         const match = Array.from(t1).some(tok1 => tok1.startsWith(tok2));
-        if (match) boost += 0.05;
+        if (match) boost += 0.10;
       } else if (tok2.length === 2 && tok2.endsWith('s')) {
         const base = tok2[0];
         const match = Array.from(t1).some(tok1 => tok1.startsWith(base));
-        if (match) boost += 0.05;
+        if (match) boost += 0.08;
       }
     }
 
